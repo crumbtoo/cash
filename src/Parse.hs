@@ -1,11 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 module Parse
     ( parse
+    , runParserT
+    , runParser
     , evalParser
 
     , char
     , string
-    , predicate
+    , satisfies
+
+    , ws
+    , comment
+    , cws
+
+    -- re-exports
+    , (<|>)
+    , some
+    , many
     )
     where
 --------------------------------------------------------------------------------
@@ -23,6 +34,9 @@ type Parser i o = ParserT i Maybe o
 evalParser :: Parser i o -> i -> Maybe o
 evalParser p i = snd <$> runParserT p i
 
+runParser :: Parser i o -> i -> Maybe (i, o)
+runParser = runParserT
+
 instance (Functor m) => Functor (ParserT i m) where
     fmap f (ParserT p) = ParserT $ \i -> fmap (mapSnd f) $ p i
         where mapSnd f (a, b) = (a, f b)
@@ -35,8 +49,10 @@ instance (Monad m) => Applicative (ParserT i m) where
         (i'', a) <- k i'
         pure $ (i'', f a)
 
+-- unhappy with the MonadPlus constraint. no way around it if ParserT is going
+-- to be a transformer.
 instance (MonadPlus m) => Alternative (ParserT i m) where
-    empty = ParserT $ const mzero
+    empty = ParserT $ const empty
 
     ParserT m <|> ParserT k = ParserT $ \i -> m i <|> k i
 
@@ -52,13 +68,16 @@ instance (MonadPlus m) => MonadFail (ParserT i m) where
 
 --------------------------------------------------------------------------------
 
-predicate :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
-predicate p = ParserT $ \case
+satisfies :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
+satisfies p = ParserT $ \case
         (x:xs) | p x -> pure $ (xs, x)
         _            -> empty
 
+allThat :: (MonadPlus m) => (a -> Bool) -> ParserT [a] m [a]
+allThat p = many (satisfies p)
+
 char :: (Alternative m, Eq a) => a -> ParserT [a] m a
-char c = predicate (==c)
+char c = satisfies (==c)
 
 string :: (Alternative m, Eq a) => [a] -> ParserT [a] m [a]
 string s = ParserT $ \i ->
@@ -67,8 +86,14 @@ string s = ParserT $ \i ->
         _           -> empty
 
 -- discord whitespace
-ws :: (Alternative m) => ParserT String m ()
-ws = ParserT $ \i -> pure (dropWhile isSpace i, ())
+ws :: (MonadPlus m) => ParserT String m ()
+ws = void $ some (satisfies isSpace)
+
+comment :: (MonadPlus m) => ParserT String m String
+comment = string "//" *> allThat (/='\n') <* optional (char '\n')
+
+cws :: (MonadPlus m) => ParserT String m ()
+cws = void $ many (ws <|> void comment)
 
 --------------------------------------------------------------------------------
 
