@@ -49,23 +49,23 @@ import           System.Process                         (system)
 --           | Multiply Expr Expr
 --           | Divide Expr Expr
 
-data Expr a where
-    Boolean     :: Bool -> Expr Bool
-    Number      :: Int -> Expr Int
-    Ident       :: String -> Expr String
-    Not         :: Expr Bool -> Expr Bool
-    Equal       :: Expr a -> Expr b -> Expr Bool
-    NotEqual    :: Expr a -> Expr b -> Expr Bool
-    Add         :: Expr Int -> Expr Int -> Expr Int
-    Subtract    :: Expr Int -> Expr Int -> Expr Int
-    Multiply    :: Expr Int -> Expr Int -> Expr Int
-    Divide      :: Expr Int -> Expr Int -> Expr Int
-    ExpCall     :: FunctionCall -> Expr a
+data Expr where
+    Boolean     :: Bool -> Expr
+    Number      :: Int -> Expr
+    Ident       :: String -> Expr
+    Not         :: Expr -> Expr
+    Equal       :: Expr -> Expr -> Expr
+    NotEqual    :: Expr -> Expr -> Expr
+    Add         :: Expr -> Expr -> Expr
+    Subtract    :: Expr -> Expr -> Expr
+    Multiply    :: Expr -> Expr -> Expr
+    Divide      :: Expr -> Expr -> Expr
+    ExpCall     :: FunctionCall -> Expr
 
-deriving instance Show (Expr a)
+deriving instance Show Expr
 
 data FunctionCall where
-    FunctionCall :: String -> [Expr a] -> FunctionCall
+    FunctionCall :: String -> [Expr] -> FunctionCall
 
 deriving instance Show FunctionCall
 
@@ -76,18 +76,18 @@ deriving instance Show FunctionCall
 
 data Block
 
-data Stat a where
-    Call        :: String -> [Expr a] -> Stat a
-    Return      :: Expr a -> Stat a
-    Block       :: [Stat a] -> Stat Block
-    If          :: Expr Bool -> Stat a -> Stat b -> Stat c
-    Let         :: String -> Expr a -> Stat a
-    Assign      :: String -> Expr a -> Stat a
-    While       :: Expr a -> Stat Block -> Stat b
+data Stat where
+    Call        :: String -> [Expr] -> Stat
+    Return      :: Expr -> Stat
+    Block       :: [Stat] -> Stat
+    If          :: Expr -> Stat -> Stat -> Stat
+    Let         :: String -> Expr -> Stat
+    Assign      :: String -> Expr -> Stat
+    While       :: Expr -> Stat -> Stat
 
 -- data Def   = Function String [String]
-data Def a where
-    Function    :: String -> [String] -> Stat Block -> Def a
+data Def where
+    FunctionDef    :: String -> [String] -> Stat -> Def
 
 --------------------------------------------------------------------------------
 
@@ -123,7 +123,7 @@ writeAST ast = do
 
 --------------------------------------------------------------------------------
 
-instance AST (Expr a) where
+instance AST Expr where
     -- terminals
     dotAST (Number n) = nodeg [ label $ printf "{ Number | %d }" n ]
     dotAST (Ident k) = nodeg [ label $ printf "{ Ident | %s }" k ]
@@ -137,6 +137,6 @@ instance AST (Expr a) where
         pure k
         
 
-instance AST (Stat a) where
+instance AST Stat where
     dotAST (Call f args) = undefined
 
