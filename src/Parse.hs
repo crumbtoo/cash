@@ -70,18 +70,6 @@ instance (MonadPlus m) => MonadFail (ParserT i m) where
 
 --------------------------------------------------------------------------------
 
-<<<<<<< HEAD
-satisfies :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
-satisfies p = ParserT $ \case
-        (x:xs) | p x -> pure $ (xs, x)
-        _            -> empty
-
-allThat :: (MonadPlus m) => (a -> Bool) -> ParserT [a] m [a]
-allThat p = many (satisfies p)
-
-char :: (Alternative m, Eq a) => a -> ParserT [a] m a
-char c = satisfies (==c)
-=======
 -- parse a single token satisfying a predicate
 satisfy :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
 satisfy p = ParserT $ \case
@@ -99,7 +87,6 @@ anyToken :: (Alternative m) => ParserT [a] m a
 anyToken = ParserT $ \case
         (c:cs)  -> pure (cs, c)
         _       -> empty
->>>>>>> e47e2bd (idk)
 
 string :: (Alternative m, Eq a) => [a] -> ParserT [a] m [a]
 string s = ParserT $ \i ->
@@ -108,16 +95,6 @@ string s = ParserT $ \i ->
         _           -> empty
 
 -- discord whitespace
-<<<<<<< HEAD
-ws :: (MonadPlus m) => ParserT String m ()
-ws = void $ some (satisfies isSpace)
-
-comment :: (MonadPlus m) => ParserT String m String
-comment = string "//" *> allThat (/='\n') <* optional (char '\n')
-
-cws :: (MonadPlus m) => ParserT String m ()
-cws = void $ many (ws <|> void comment)
-=======
 -- ws :: (MonadPlus m) => ParserT String m ()
 -- ws = void $ some (satisfy isSpace)
 
@@ -127,14 +104,9 @@ cws = void $ many (ws <|> void comment)
 
 -- cws :: (MonadPlus m) => ParserT String m ()
 -- cws = void $ many (ws <|> void comment)
->>>>>>> e47e2bd (idk)
 
 --------------------------------------------------------------------------------
 
 parse :: Parser String [String]
-<<<<<<< HEAD
-parse = many (ws *> string "function" <* ws)
-=======
 parse = many (string "Function")
->>>>>>> e47e2bd (idk)
 
