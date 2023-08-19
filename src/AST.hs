@@ -2,6 +2,7 @@
 module AST
     ( AST(..)
     , Expr(..)
+    , FunctionCall(..)
     , Stat(..)
     , Def(..)
     , writeAST
@@ -49,6 +50,7 @@ import           System.Process                         (system)
 --           | Divide Expr Expr
 
 data Expr a where
+    Boolean     :: Bool -> Expr Bool
     Number      :: Int -> Expr Int
     Ident       :: String -> Expr String
     Not         :: Expr Bool -> Expr Bool
@@ -58,7 +60,14 @@ data Expr a where
     Subtract    :: Expr Int -> Expr Int -> Expr Int
     Multiply    :: Expr Int -> Expr Int -> Expr Int
     Divide      :: Expr Int -> Expr Int -> Expr Int
-    ExpCall     :: String -> [Expr a] -> Expr a
+    ExpCall     :: FunctionCall -> Expr a
+
+deriving instance Show (Expr a)
+
+data FunctionCall where
+    FunctionCall :: String -> [Expr a] -> FunctionCall
+
+deriving instance Show FunctionCall
 
 -- data Stat a = Call String [Expr a]
 --             | Return (Expr a)

@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 module Lex
     ( lexer
+    , Token(..)
     )
     where
 --------------------------------------------------------------------------------
@@ -23,7 +24,7 @@ data Token
     | TokenLBrace
     | TokenRBrace
     -- literals
-    | TokenInt Int
+    | TokenNumber Int
     | TokenIdent String
     -- exprs
     | TokenNot
@@ -39,6 +40,10 @@ lexer :: String -> [Token]
 
 -- eof
 lexer "" = []
+
+-- discard whitespace
+lexer (c:cs)
+    | isSpace c  = lexer (dropWhile isSpace cs)
 
 -- syntax
 lexer (',':cs) = TokenComma     : lexer cs
@@ -66,4 +71,11 @@ lexer (c:cs)
         (nameTail, rest) = span (isLetter |.| isDigit |.| (=='_')) cs
 
         f |.| g = \a -> f a || g a
+
+-- int literals
+lexer s@(c:_)
+    | isDigit c  = TokenNumber (toInt num) : lexer rest
+    where
+        (num, rest) = span isDigit s
+        toInt = foldl (\n d -> 10 * n + digitToInt d) 0
 

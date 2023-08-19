@@ -28,6 +28,7 @@ import       Data.List
 import       Data.Char
 
 import AST
+import Lex
 --------------------------------------------------------------------------------
 
 newtype ParserT i m o = ParserT { runParserT :: i -> m (i, o) }
@@ -76,17 +77,14 @@ satisfy p = ParserT $ \case
         (x:xs) | p x -> pure $ (xs, x)
         _            -> empty
 
--- parse a single token satisfying a predicate
 satisfies :: (MonadPlus m) => (a -> Bool) -> ParserT [a] m [a]
-satisfies p = many (satisfy p)
+satisfies = many . satisfy
 
 token :: (Alternative m, Eq a) => a -> ParserT [a] m a
 token c = satisfy (==c)
 
 anyToken :: (Alternative m) => ParserT [a] m a
-anyToken = ParserT $ \case
-        (c:cs)  -> pure (cs, c)
-        _       -> empty
+anyToken = satisfy (const True)
 
 string :: (Alternative m, Eq a) => [a] -> ParserT [a] m [a]
 string s = ParserT $ \i ->
@@ -109,4 +107,7 @@ string s = ParserT $ \i ->
 
 parse :: Parser String [String]
 parse = many (string "Function")
+
+-- expr :: Parser [Token] (Expr a)
+-- expr = 
 
