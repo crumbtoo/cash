@@ -24,6 +24,7 @@ maintainer:         crumb@duck.com
 library
     exposed-modules:  AST
                     , Parse
+                    , Lex
     hs-source-dirs:   src
     build-depends:    base ^>=4.16.4.0
                     , graphviz
