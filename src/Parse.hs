@@ -73,7 +73,7 @@ instance (MonadPlus m) => MonadFail (ParserT i m) where
 -- parse a single token satisfying a predicate
 satisfy :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
 satisfy p = ParserT $ \case
-        (x:xs) | p x -> pure $ (xs, x)
+        (x:xs) | p x -> pure (xs, x)
         _            -> empty
 
 satisfies :: (MonadPlus m) => (a -> Bool) -> ParserT [a] m [a]
@@ -81,6 +81,11 @@ satisfies = many . satisfy
 
 token :: (Alternative m, Eq a) => a -> ParserT [a] m a
 token c = satisfy (==c)
+
+lookahead :: (Alternative m) => ParserT [a] m a
+lookahead = ParserT $ \case
+        [] -> empty
+        i  -> pure (i, head i)
 
 anyToken :: (Alternative m) => ParserT [a] m a
 anyToken = satisfy (const True)
@@ -111,21 +116,32 @@ parselex p = evalParser p . lexer
 -- parse = evalParser atom . lexer
 
 expr :: Parser [Token] Expr
-expr  = comparison
-    <|> atom
-    -- <|> LitNum <$> number
+expr = comparison
+
+comparison :: Parser [Token] Expr
+comparison = binopl Equal TokenEqual bsum
+         <|> binopl NotEqual TokenNotEqual bsum
+
+-- comparison = Equal    <$> (bsum <* token TokenEqual)    <*> bsum
+--          <|> NotEqual <$> (bsum <* token TokenNotEqual) <*> bsum
+
+bsum :: Parser [Token] Expr
+bsum  = binopl Add TokenPlus bproduct
+    <|> binopl Subtract TokenMinus bproduct
+
+bproduct :: Parser [Token] Expr
+bproduct = binopl Multiply TokenStar unary
+       <|> binopl Divide TokenSlash unary
+
+unary :: Parser [Token] Expr
+unary = undefined
+
+binopl :: (Eq i) => (a -> a -> b) -> i -> Parser [i] a -> Parser [i] b
+binopl f t x = f <$> (x <* token t) <*> x
 
 atom :: Parser [Token] Expr
 atom  = Var <$> ident
     <|> Call <$> functionCall
-
-comparison :: Parser [Token] Expr
-comparison = binopl Equal TokenEqual
-         -- <|> binopl NotEqual TokenNotEqual
-            
-
-binopl :: (Expr -> Expr -> Expr) -> Token -> Parser [Token] Expr
-binopl f t = f <$> (expr <* token t) <*> expr
 
 functionCall :: Parser [Token] FunctionCall
 functionCall = FunctionCall <$>

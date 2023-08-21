@@ -79,6 +79,7 @@ data Expr = Call FunctionCall
           | LitNum Int
           | Equal Expr Expr
           | NotEqual Expr Expr
+          | Add Expr Expr
           | Subtract Expr Expr
           | Multiply Expr Expr
           | Divide Expr Expr
