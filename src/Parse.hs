@@ -79,7 +79,6 @@ withPrec p' pa = ParserT $ \p i -> guard (p <= p') *> runParserT pa p' i
 higher :: Parser i o -> Parser i o
 higher pa = ParserT $ \p i -> runParserT pa (succ p) i
 
-
 -- parse a single token satisfying a predicate
 satisfy :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
 satisfy p = ParserT . const $ \case
@@ -145,8 +144,9 @@ bproduct = binopl 7 Multiply TokenStar
        <|> binopl 7 Divide TokenSlash
 
 atom :: Parser [Token] Expr
-atom  = Var <$> ident
+atom  = Call <$> functionCall 
     <|> LitNum <$> number
+    <|> Var <$> ident
 
 unary :: Parser [Token] Expr
 unary = Not <$> (token TokenNot *> atom)
