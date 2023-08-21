@@ -121,6 +121,23 @@ writeAST ast = do
     system "dot -Tsvg /tmp/t.dot > /tmp/t.svg"
     pure ()
 
+dotbin :: (AST a) => String -> a -> a -> DotGen Text
+dotbin l a b = do
+    p <- nodeg [ label l ]
+    q <- dotAST a
+    r <- dotAST b
+    lift $ do
+        p --> q
+        p --> r
+    pure p
+
+dotunary :: (AST a) => String -> a -> DotGen Text
+dotunary l a = do
+    p <- nodeg [ label l ]
+    q <- dotAST a
+    lift $ p --> q
+    pure p
+
 --------------------------------------------------------------------------------
 
 instance AST Expr where
@@ -129,13 +146,14 @@ instance AST Expr where
     dotAST (Var k) = nodeg [ label $ printf "{ Var | %s }" k ]
 
     -- non-terminals
-    dotAST (Not e) = do
-        k <- mklabel
-        lift $ node k [ label "{ Not }" ]
-        v <- dotAST e
-        lift $ k --> v
-        pure k
-        
+    dotAST (Not a) = dotunary "Not" a
+    
+    dotAST (Equal a b) = dotbin "Equal" a b
+    dotAST (Add a b) = dotbin "Add" a b
+    dotAST (Subtract a b) = dotbin "Subtract" a b
+    dotAST (Multiply a b) = dotbin "Multiply" a b
+    dotAST (Divide a b) = dotbin "Divide" a b
+    
 
 instance AST Stat where
     dotAST (FunctionStat name params body) = do

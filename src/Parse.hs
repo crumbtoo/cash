@@ -121,27 +121,30 @@ expr = comparison
 comparison :: Parser [Token] Expr
 comparison = binopl Equal TokenEqual bsum
          <|> binopl NotEqual TokenNotEqual bsum
-
--- comparison = Equal    <$> (bsum <* token TokenEqual)    <*> bsum
---          <|> NotEqual <$> (bsum <* token TokenNotEqual) <*> bsum
+         <|> bsum
 
 bsum :: Parser [Token] Expr
 bsum  = binopl Add TokenPlus bproduct
     <|> binopl Subtract TokenMinus bproduct
+    <|> bproduct
 
 bproduct :: Parser [Token] Expr
 bproduct = binopl Multiply TokenStar unary
        <|> binopl Divide TokenSlash unary
+       <|> unary
 
 unary :: Parser [Token] Expr
-unary = undefined
+unary = Not <$> (token TokenNot *> atom)
+    <|> atom
 
 binopl :: (Eq i) => (a -> a -> b) -> i -> Parser [i] a -> Parser [i] b
 binopl f t x = f <$> (x <* token t) <*> x
 
 atom :: Parser [Token] Expr
-atom  = Var <$> ident
-    <|> Call <$> functionCall
+atom  = Call <$> functionCall
+    <|> Var <$> ident
+    <|> LitNum <$> number
+    <|> token TokenLParen *> expr <* token TokenRParen
 
 functionCall :: Parser [Token] FunctionCall
 functionCall = FunctionCall <$>
