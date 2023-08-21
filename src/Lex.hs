@@ -6,36 +6,11 @@ module Lex
     where
 --------------------------------------------------------------------------------
 import       Data.Char
+import       Data.List
+
+import AST
 --------------------------------------------------------------------------------
 
-data Token
-    -- keywords
-    = TokenFunction
-    | TokenIf
-    | TokenElse
-    | TokenReturn
-    | TokenLet
-    | TokenWhile
-    -- syntax
-    | TokenComma
-    | TokenSemicolon
-    | TokenLParen
-    | TokenRParen
-    | TokenLBrace
-    | TokenRBrace
-    -- literals
-    | TokenNumber Int
-    | TokenIdent String
-    -- exprs
-    | TokenNot
-    | TokenEqual
-    | TokenNotEqual
-    | TokenPlus
-    | TokenStar
-    | TokenMinus
-    | TokenSlash
-    deriving Show
-    
 lexer :: String -> [Token]
 
 -- eof
@@ -52,6 +27,15 @@ lexer ('(':cs) = TokenLParen    : lexer cs
 lexer (')':cs) = TokenRParen    : lexer cs
 lexer ('{':cs) = TokenLBrace    : lexer cs
 lexer ('}':cs) = TokenRBrace    : lexer cs
+
+-- operators
+lexer ('=':'=':cs)  = TokenEqual     : lexer cs     
+lexer ('!':'=':cs)  = TokenNotEqual  : lexer cs     
+lexer ('!':cs)      = TokenNot       : lexer cs
+lexer ('+':cs)      = TokenPlus      : lexer cs     
+lexer ('-':cs)      = TokenMinus     : lexer cs     
+lexer ('*':cs)      = TokenStar      : lexer cs     
+lexer ('/':cs)      = TokenSlash     : lexer cs     
 
 -- keywords
 lexer s

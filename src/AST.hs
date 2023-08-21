@@ -5,7 +5,11 @@ module AST
     , FunctionCall(..)
     , Stat(..)
     , Def(..)
+    , Token(..)
     , writeAST
+
+    , isIdent
+    , isNumber
     )
     where
 --------------------------------------------------------------------------------
@@ -21,33 +25,43 @@ import           Text.Printf
 import           System.Process                         (system)
 --------------------------------------------------------------------------------
 
--- data AST
---     -- terminals
---     = Number Int
---     | Ident String
---     -- expr
---     | Not AST -- TODO: this should be an expression, not any AST
---     | Equal AST AST
---     | NotEqual AST AST
---     | Add AST AST
---     | Subtract AST AST
---     | Multiply AST AST
---     | Divide AST AST
---     | Call String [AST]
---     deriving (Eq, Ord, Show)
+data Token
+    -- keywords
+    = TokenFunction
+    | TokenIf
+    | TokenElse
+    | TokenReturn
+    | TokenLet
+    | TokenWhile
+    -- syntax
+    | TokenComma
+    | TokenSemicolon
+    | TokenLParen
+    | TokenRParen
+    | TokenLBrace
+    | TokenRBrace
+    -- literals
+    | TokenNumber Int
+    | TokenIdent String
+    -- exprs
+    | TokenNot
+    | TokenEqual
+    | TokenNotEqual
+    | TokenPlus
+    | TokenStar
+    | TokenMinus
+    | TokenSlash
+    deriving (Show, Eq)
 
--- data Token = TokenNumber Int
---            | TokenIdent String
+isIdent :: Token -> Bool
+isIdent (TokenIdent _) = True
+isIdent _              = False
 
--- data Expr = Number Int
---           | Ident String
---           | Not Expr
---           | Equal Expr Expr
---           | NotEqual Expr Expr
---           | Add Expr Expr
---           | Subtract Expr Expr
---           | Multiply Expr Expr
---           | Divide Expr Expr
+isNumber :: Token -> Bool
+isNumber (TokenNumber _) = True
+isNumber _              = False
+
+--------------------------------------------------------------------------------
 
 data Expr where
     Boolean     :: Bool -> Expr

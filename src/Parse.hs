@@ -1,34 +1,33 @@
 {-# LANGUAGE LambdaCase #-}
 module Parse
-    ( parse
-    , runParserT
-    , runParser
-    , evalParser
+    -- ( parse
+    -- , runParserT
+    -- , runParser
+    -- , evalParser
 
-    , token
-    , anyToken
-    , string
-    , satisfy
-    , satisfies
+    -- , token
+    -- , anyToken
+    -- , string
+    -- , satisfy
+    -- , satisfies
 
-    -- , ws
-    -- , comment
-    -- , cws
+    -- -- , ws
+    -- -- , comment
+    -- -- , cws
 
-    -- re-exports
-    , (<|>)
-    , some
-    , many
-    )
+    -- -- re-exports
+    -- , (<|>)
+    -- , some
+    -- , many
+    -- )
     where
 --------------------------------------------------------------------------------
 import       Control.Applicative
 import       Control.Monad
 import       Data.List
-import       Data.Char
 
 import AST
-import Lex
+import Lex (lexer)
 --------------------------------------------------------------------------------
 
 newtype ParserT i m o = ParserT { runParserT :: i -> m (i, o) }
@@ -105,9 +104,35 @@ string s = ParserT $ \i ->
 
 --------------------------------------------------------------------------------
 
-parse :: Parser String [String]
-parse = many (string "Function")
+parse :: String -> Maybe Expr
+parse = evalParser atom . lexer
 
--- expr :: Parser [Token] (Expr a)
--- expr = 
+expr :: Parser [Token] Expr
+expr = undefined
+
+comparison :: Parser [Token] Expr
+comparison = undefined
+
+atom :: Parser [Token] Expr
+atom  = ExpCall <$> call
+    <|> Ident   <$> ident
+    <|> Number  <$> number
+    <|> (token TokenLParen *> expr <* token TokenRParen)
+
+call :: Parser [Token] FunctionCall
+call = FunctionCall <$> ident <*> (token TokenLParen *> args <* token TokenRParen)
+
+-- args = undefined
+args :: Parser [Token] [Expr]
+args  = liftA2 (:) expr (many $ comma *> expr)
+    <|> pure []
+    where
+        comma :: Parser [Token] Token
+        comma = token TokenComma
+
+ident :: Parser [Token] String
+ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
+
+number :: Parser [Token] Int
+number = fmap (\(TokenNumber n) -> n) $ satisfy isNumber
 
