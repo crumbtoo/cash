@@ -30,38 +30,38 @@ import AST
 import Lex (lexer)
 --------------------------------------------------------------------------------
 
-newtype ParserT i m o = ParserT { runParserT :: i -> m (i, o) }
+newtype ParserT i m o = ParserT { runParserT :: Int -> i -> m (i, o) }
 type Parser i o = ParserT i Maybe o
 
 evalParser :: Parser i o -> i -> Maybe o
-evalParser p i = snd <$> runParserT p i
+evalParser p i = snd <$> runParserT p 0 i
 
-runParser :: Parser i o -> i -> Maybe (i, o)
+runParser :: Parser i o -> Int -> i -> Maybe (i, o)
 runParser = runParserT
 
 instance (Functor m) => Functor (ParserT i m) where
-    fmap f (ParserT p) = ParserT $ \i -> fmap (mapSnd f) $ p i
+    fmap f (ParserT p) = ParserT $ \pr i -> fmap (mapSnd f) $ p pr i
         where mapSnd f (a, b) = (a, f b)
 
 instance (Monad m) => Applicative (ParserT i m) where
-    pure a = ParserT $ \i -> pure (i, a)
+    pure a = ParserT . const $ \i -> pure (i, a)
     
-    ParserT m <*> ParserT k = ParserT $ \i -> do
-        (i', f) <- m i
-        (i'', a) <- k i'
+    ParserT m <*> ParserT k = ParserT $ \pr i -> do
+        (i', f) <- m pr i
+        (i'', a) <- k pr i'
         pure $ (i'', f a)
 
 -- unhappy with the MonadPlus constraint. no way around it if ParserT is going
 -- to be a transformer.
 instance (MonadPlus m) => Alternative (ParserT i m) where
-    empty = ParserT $ const empty
+    empty = ParserT . const $ const empty
 
-    ParserT m <|> ParserT k = ParserT $ \i -> m i <|> k i
+    ParserT m <|> ParserT k = ParserT $ \pr i -> m pr i <|> k pr i
 
 instance (Monad m) => Monad (ParserT i m) where
-    ParserT m >>= k = ParserT $ \i -> do
-        (i', a) <- m i
-        runParserT (k a) i'
+    ParserT m >>= k = ParserT $ \pr i -> do
+        (i', a) <- m pr i
+        runParserT (k a) pr i'
 
 instance (MonadPlus m) => MonadPlus (ParserT i m)
 
@@ -69,10 +69,19 @@ instance (MonadPlus m) => MonadFail (ParserT i m) where
     fail _ = mzero
 
 --------------------------------------------------------------------------------
+ 
+-- assign a given parser a precedence, making a parser that fails if ran with a
+-- lower precedence than specified
+withPrec :: Int -> Parser i o -> Parser i o
+withPrec p' pa = ParserT $ \p i -> guard (p <= p') *> runParserT pa p' i
+
+higher :: Parser i o -> Parser i o
+higher pa = ParserT $ \p i -> runParserT pa (succ p) i
+
 
 -- parse a single token satisfying a predicate
 satisfy :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
-satisfy p = ParserT $ \case
+satisfy p = ParserT . const $ \case
         (x:xs) | p x -> pure (xs, x)
         _            -> empty
 
@@ -83,7 +92,7 @@ token :: (Alternative m, Eq a) => a -> ParserT [a] m a
 token c = satisfy (==c)
 
 lookahead :: (Alternative m) => ParserT [a] m a
-lookahead = ParserT $ \case
+lookahead = ParserT . const $ \case
         [] -> empty
         i  -> pure (i, head i)
 
@@ -91,7 +100,7 @@ anyToken :: (Alternative m) => ParserT [a] m a
 anyToken = satisfy (const True)
 
 string :: (Alternative m, Eq a) => [a] -> ParserT [a] m [a]
-string s = ParserT $ \i ->
+string s = ParserT $ \pr i ->
     case stripPrefix s i of
         (Just rest) -> pure (rest, s)
         _           -> empty
