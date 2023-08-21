@@ -33,8 +33,8 @@ import Lex (lexer)
 newtype ParserT i m o = ParserT { runParserT :: Int -> i -> m (i, o) }
 type Parser i o = ParserT i Maybe o
 
-evalParser :: Parser i o -> i -> Maybe o
-evalParser p i = snd <$> runParserT p 0 i
+evalParser :: Parser i o -> Int -> i -> Maybe o
+evalParser p pr i = snd <$> runParserT p pr i
 
 runParser :: Parser i o -> Int -> i -> Maybe (i, o)
 runParser = runParserT
@@ -72,9 +72,10 @@ instance (MonadPlus m) => MonadFail (ParserT i m) where
  
 -- assign a given parser a precedence, making a parser that fails if ran with a
 -- lower precedence than specified
-withPrec :: Int -> Parser i o -> Parser i o
+withPrec :: (MonadPlus m) => Int -> ParserT i m o -> ParserT i m o
 withPrec p' pa = ParserT $ \p i -> guard (p <= p') *> runParserT pa p' i
 
+-- run parser with the next precedence level
 higher :: Parser i o -> Parser i o
 higher pa = ParserT $ \p i -> runParserT pa (succ p) i
 
@@ -119,41 +120,45 @@ string s = ParserT $ \pr i ->
 --------------------------------------------------------------------------------
 
 parselex :: Parser [Token] o -> String -> Maybe o
-parselex p = evalParser p . lexer
+parselex p = evalParser p 0 . lexer
 
 -- parse :: String -> Maybe Expr
 -- parse = evalParser atom . lexer
 
 expr :: Parser [Token] Expr
-expr = comparison
+expr  = comparison
+    <|> bsum
+    <|> bproduct
+    <|> unary
+    <|> atom
 
 comparison :: Parser [Token] Expr
-comparison = binopl Equal TokenEqual bsum
-         <|> binopl NotEqual TokenNotEqual bsum
-         <|> bsum
+comparison = binopl 3 Equal TokenEqual
+         <|> binopl 3 NotEqual TokenNotEqual
 
 bsum :: Parser [Token] Expr
-bsum  = binopl Add TokenPlus bproduct
-    <|> binopl Subtract TokenMinus bproduct
-    <|> bproduct
+bsum  = binopl 6 Add TokenPlus
+    <|> binopl 6 Subtract TokenMinus
 
 bproduct :: Parser [Token] Expr
-bproduct = binopl Multiply TokenStar unary
-       <|> binopl Divide TokenSlash unary
-       <|> unary
+bproduct = binopl 7 Multiply TokenStar
+       <|> binopl 7 Divide TokenSlash
+
+atom :: Parser [Token] Expr
+atom  = Var <$> ident
+    <|> LitNum <$> number
 
 unary :: Parser [Token] Expr
 unary = Not <$> (token TokenNot *> atom)
-    <|> atom
 
-binopl :: (Eq i) => (a -> a -> b) -> i -> Parser [i] a -> Parser [i] b
-binopl f t x = f <$> (x <* token t) <*> x
+binopl :: Int -> (Expr -> Expr -> Expr) -> Token -> Parser [Token] Expr
+binopl pr f t = withPrec pr $ f <$> (higher expr <* token t) <*> higher expr
 
-atom :: Parser [Token] Expr
-atom  = Call <$> functionCall
-    <|> Var <$> ident
-    <|> LitNum <$> number
-    <|> token TokenLParen *> expr <* token TokenRParen
+-- atom :: Parser [Token] Expr
+-- atom  = Call <$> functionCall
+--     <|> Var <$> ident
+--     <|> LitNum <$> number
+--     <|> token TokenLParen *> expr <* token TokenRParen
 
 functionCall :: Parser [Token] FunctionCall
 functionCall = FunctionCall <$>

@@ -6,6 +6,7 @@ module AST
     , Stat(..)
     , Token(..)
     , writeAST
+    , writeAST'
 
     , isIdent
     , isNumber
@@ -110,6 +111,9 @@ mklabel = do
     n <- get
     modify succ
     pure $ "L" <> T.pack (show n)
+
+writeAST' :: (AST a) => Maybe a -> IO ()
+writeAST' (Just a) = writeAST a
 
 writeAST :: (AST a) => a -> IO ()
 writeAST ast = do
