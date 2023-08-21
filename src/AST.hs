@@ -4,7 +4,6 @@ module AST
     , Expr(..)
     , FunctionCall(..)
     , Stat(..)
-    , Def(..)
     , Token(..)
     , writeAST
 
@@ -63,45 +62,31 @@ isNumber _              = False
 
 --------------------------------------------------------------------------------
 
-data Expr where
-    Boolean     :: Bool -> Expr
-    Number      :: Int -> Expr
-    Ident       :: String -> Expr
-    Not         :: Expr -> Expr
-    Equal       :: Expr -> Expr -> Expr
-    NotEqual    :: Expr -> Expr -> Expr
-    Add         :: Expr -> Expr -> Expr
-    Subtract    :: Expr -> Expr -> Expr
-    Multiply    :: Expr -> Expr -> Expr
-    Divide      :: Expr -> Expr -> Expr
-    ExpCall     :: FunctionCall -> Expr
+type Ident = String
 
-deriving instance Show Expr
+data Stat = FunctionStat Ident [Ident] Stat
+          | ReturnStat Expr
+          | IfStat Expr Expr Expr
+          | WhileStat Expr Stat
+          | AssignStat Ident Expr
+          | BlockStat [Stat]
+          | ExprStat Expr
+          | CallStat FunctionCall
+          deriving (Show)
 
-data FunctionCall where
-    FunctionCall :: String -> [Expr] -> FunctionCall
+data Expr = Call FunctionCall
+          | Var Ident
+          | LitNum Int
+          | Equal Expr Expr
+          | NotEqual Expr Expr
+          | Subtract Expr Expr
+          | Multiply Expr Expr
+          | Divide Expr Expr
+          | Not Expr
+          deriving (Show)
 
-deriving instance Show FunctionCall
-
--- data Stat a = Call String [Expr a]
---             | Return (Expr a)
---             | Block [Stat a]
---             | If (Expr a) (Stat a) (Stat a)
-
-data Block
-
-data Stat where
-    Call        :: String -> [Expr] -> Stat
-    Return      :: Expr -> Stat
-    Block       :: [Stat] -> Stat
-    If          :: Expr -> Stat -> Stat -> Stat
-    Let         :: String -> Expr -> Stat
-    Assign      :: String -> Expr -> Stat
-    While       :: Expr -> Stat -> Stat
-
--- data Def   = Function String [String]
-data Def where
-    FunctionDef    :: String -> [String] -> Stat -> Def
+data FunctionCall = FunctionCall Ident [Expr]
+    deriving (Show)
 
 --------------------------------------------------------------------------------
 
@@ -138,9 +123,9 @@ writeAST ast = do
 --------------------------------------------------------------------------------
 
 instance AST Expr where
-    -- terminals
-    dotAST (Number n) = nodeg [ label $ printf "{ Number | %d }" n ]
-    dotAST (Ident k) = nodeg [ label $ printf "{ Ident | %s }" k ]
+    -- atoms
+    dotAST (LitNum n) = nodeg [ label $ printf "{ LitNum | %d }" n ]
+    dotAST (Var k) = nodeg [ label $ printf "{ Var | %s }" k ]
 
     -- non-terminals
     dotAST (Not e) = do
@@ -152,5 +137,25 @@ instance AST Expr where
         
 
 instance AST Stat where
-    dotAST (Call f args) = undefined
+    dotAST (FunctionStat name params body) = do
+        p <- nodeg [ label $
+                printf "{ FunctionStat | %s | %s }" name (show params) ]
+        q <- dotAST body
+        lift $ p --> q
+        pure q
+    
+    dotAST (BlockStat ss) = do
+        p <- nodeg [ label "BlockStat" ]
+
+        forM ss $ \s -> do
+            q <- dotAST s
+            lift $ p --> q
+
+        pure p
+
+    dotAST (ReturnStat e) = do
+        p <- nodeg [ label "Return" ]
+        q <- dotAST e
+        lift $ p --> q
+        pure p
 

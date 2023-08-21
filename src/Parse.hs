@@ -104,31 +104,36 @@ string s = ParserT $ \i ->
 
 --------------------------------------------------------------------------------
 
-parse :: String -> Maybe Expr
-parse = evalParser atom . lexer
+parselex :: Parser [Token] o -> String -> Maybe o
+parselex p = evalParser p . lexer
+
+-- parse :: String -> Maybe Expr
+-- parse = evalParser atom . lexer
 
 expr :: Parser [Token] Expr
-expr = undefined
-
-comparison :: Parser [Token] Expr
-comparison = undefined
+expr  = comparison
+    <|> atom
+    -- <|> LitNum <$> number
 
 atom :: Parser [Token] Expr
-atom  = ExpCall <$> call
-    <|> Ident   <$> ident
-    <|> Number  <$> number
-    <|> (token TokenLParen *> expr <* token TokenRParen)
+atom  = Var <$> ident
+    <|> Call <$> functionCall
 
-call :: Parser [Token] FunctionCall
-call = FunctionCall <$> ident <*> (token TokenLParen *> args <* token TokenRParen)
+comparison :: Parser [Token] Expr
+comparison = binopl Equal TokenEqual
+         -- <|> binopl NotEqual TokenNotEqual
+            
 
--- args = undefined
-args :: Parser [Token] [Expr]
-args  = liftA2 (:) expr (many $ comma *> expr)
-    <|> pure []
-    where
-        comma :: Parser [Token] Token
-        comma = token TokenComma
+binopl :: (Expr -> Expr -> Expr) -> Token -> Parser [Token] Expr
+binopl f t = f <$> (expr <* token t) <*> expr
+
+functionCall :: Parser [Token] FunctionCall
+functionCall = FunctionCall <$>
+    ident <*> (token TokenLParen *> argList <* token TokenRParen)
+
+argList :: Parser [Token] [Expr]
+argList   = (:) <$> expr <*> (many $ token TokenComma *> expr)
+        <|> pure []
 
 ident :: Parser [Token] String
 ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
