@@ -156,10 +156,13 @@ atom  = Call <$> functionCall
 functionCall :: Parser [Token] FunctionCall
 functionCall = FunctionCall <$>
     ident <*> (token TokenLParen *> argList <* token TokenRParen)
+    where
+        argList :: Parser [Token] [Expr]
+        argList = commaSeparated expr
 
-argList :: Parser [Token] [Expr]
-argList   = (:) <$> expr <*> (many $ token TokenComma *> expr)
-        <|> pure []
+commaSeparated :: Parser [Token] o -> Parser [Token] [o]
+commaSeparated p = (:) <$> p <*> (many $ token TokenComma *> p)
+               <|> pure []
 
 ident :: Parser [Token] String
 ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
@@ -174,12 +177,14 @@ parenthesised p = token TokenLParen *> p <* token TokenRParen
 
 stat :: Parser [Token] Stat
 stat  = stat' <* token TokenSemicolon
+    <|> functionStat -- no semicolon
     where stat' = assignStat
               <|> exprStat
               <|> ifStat
               <|> whileStat
               <|> varStat
               <|> returnStat
+              <|> blockStat
 
 returnStat :: Parser [Token] Stat
 returnStat = ReturnStat <$> (token TokenReturn *> expr)
@@ -210,4 +215,11 @@ assignStat = AssignStat
 
 blockStat :: Parser [Token] Stat
 blockStat = BlockStat <$> (token TokenLBrace *> many stat <* token TokenRBrace)
+
+functionStat :: Parser [Token] Stat
+functionStat = FunctionStat
+    <$> (token TokenFunction *> ident)
+    <*> parenthesised parameters
+    <*> blockStat
+    where parameters = commaSeparated ident
 
