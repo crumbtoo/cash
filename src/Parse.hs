@@ -24,7 +24,9 @@ module Parse
 --------------------------------------------------------------------------------
 import       Control.Applicative
 import       Control.Monad
+import       Control.Monad.Zip
 import       Data.List
+import       Data.Functor
 
 import AST
 import Lex (lexer)
@@ -68,6 +70,9 @@ instance (MonadPlus m) => MonadPlus (ParserT i m)
 instance (MonadPlus m) => MonadFail (ParserT i m) where
     fail _ = mzero
 
+instance (Monad m) => MonadZip (ParserT i m) where
+    mzip = liftA2 (,)
+
 --------------------------------------------------------------------------------
 
 -- parse a single token satisfying a predicate
@@ -109,42 +114,44 @@ string s = ParserT $ \i ->
 
 --------------------------------------------------------------------------------
 
+-- shitty hack because i'm a shit programmer
+-- flipAssoc :: Expr -> Expr
+-- flipAssoc (Add a (Add b c)) = Add (Add (flipAssoc a) (flipAssoc b)) (flipAssoc c)
+
 parselex :: Parser [Token] o -> String -> Maybe o
 parselex p = evalParser p . lexer
 
--- parse :: String -> Maybe Expr
--- parse = evalParser atom . lexer
+binfix :: Parser i (o -> o -> o) -> Parser i o -> Parser i o
+binfix opp termp = foldl (\acc (f,b) -> acc `f` b) <$> termp <*> opterms
+    where opterms = many (opp `mzip` termp)
 
 expr :: Parser [Token] Expr
 expr = comparison
 
 comparison :: Parser [Token] Expr
-comparison = binopl Equal TokenEqual bsum
-         <|> binopl NotEqual TokenNotEqual bsum
-         <|> bsum
+comparison = binfix opp bsum
+    where opp = token TokenEqual $> Equal
+            <|> token TokenNotEqual $> NotEqual
 
 bsum :: Parser [Token] Expr
-bsum  = binopl Add TokenPlus bproduct
-    <|> binopl Subtract TokenMinus bproduct
-    <|> bproduct
+bsum = binfix opp bproduct
+    where opp = token TokenPlus $> Add
+            <|> token TokenMinus $> Subtract
 
 bproduct :: Parser [Token] Expr
-bproduct = binopl Multiply TokenStar unary
-       <|> binopl Divide TokenSlash unary
-       <|> unary
+bproduct = binfix opp unary
+    where opp = token TokenStar $> Multiply
+            <|> token TokenSlash $> Divide
 
 unary :: Parser [Token] Expr
 unary = Not <$> (token TokenNot *> atom)
     <|> atom
 
-binopl :: (Eq i) => (a -> a -> b) -> i -> Parser [i] a -> Parser [i] b
-binopl f t x = f <$> (x <* token t) <*> x
-
 atom :: Parser [Token] Expr
 atom  = Call <$> functionCall
     <|> Var <$> ident
     <|> LitNum <$> number
-    <|> token TokenLParen *> expr <* token TokenRParen
+    <|> parenthesised expr
 
 functionCall :: Parser [Token] FunctionCall
 functionCall = FunctionCall <$>
@@ -159,4 +166,40 @@ ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
 
 number :: Parser [Token] Int
 number = fmap (\(TokenNumber n) -> n) $ satisfy isNumber
+
+--------------------------------------------------------------------------------
+
+stat :: Parser [Token] Stat
+stat  = returnStat
+    <|> exprStat
+
+returnStat :: Parser [Token] Stat
+returnStat = ReturnStat <$> (token TokenReturn *> expr <* token TokenSemicolon)
+
+exprStat :: Parser [Token] Stat
+exprStat = ExprStat <$> expr <* token TokenSemicolon
+
+ifStat :: Parser [Token] Stat
+ifStat = IfStat
+    <$> (token TokenIf *> parenthesised expr)
+    <*> stat
+    <*> ((token TokenElse *> stat) <|> pure (BlockStat []))
+
+parenthesised :: Parser [Token] o -> Parser [Token] o
+parenthesised p = token TokenLParen *> p <* token TokenRParen
+
+whileStat :: Parser [Token] Stat
+whileStat = WhileStat
+    <$> expr
+    <*> stat
+
+varStat :: Parser [Token] Stat
+varStat = VarStat
+    <$> (token TokenLet *> ident)
+    <*> (token TokenAssign *> expr <* token TokenSemicolon)
+
+assignStat :: Parser [Token] Stat
+assignStat = AssignStat
+    <$> ident
+    <*> (token TokenAssign *> expr <* token TokenSemicolon)
 

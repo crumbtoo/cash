@@ -5,7 +5,9 @@ module AST
     , FunctionCall(..)
     , Stat(..)
     , Token(..)
+
     , writeAST
+    , writeAST'
 
     , isIdent
     , isNumber
@@ -46,6 +48,7 @@ data Token
     | TokenNot
     | TokenEqual
     | TokenNotEqual
+    | TokenAssign
     | TokenPlus
     | TokenStar
     | TokenMinus
@@ -66,8 +69,9 @@ type Ident = String
 
 data Stat = FunctionStat Ident [Ident] Stat
           | ReturnStat Expr
-          | IfStat Expr Expr Expr
+          | IfStat Expr Stat Stat
           | WhileStat Expr Stat
+          | VarStat Ident Expr
           | AssignStat Ident Expr
           | BlockStat [Stat]
           | ExprStat Expr
@@ -111,6 +115,9 @@ mklabel = do
     modify succ
     pure $ "L" <> T.pack (show n)
 
+writeAST' :: (AST a) => Maybe a -> IO ()
+writeAST' (Just a) = writeAST a
+
 writeAST :: (AST a) => a -> IO ()
 writeAST ast = do
     writeFile "/tmp/t.dot" . T.unpack . printDotGraph $ do
@@ -138,6 +145,19 @@ dotunary l a = do
     lift $ p --> q
     pure p
 
+addHint :: String -> DotGen Text -> DotGen Text
+addHint l a = do
+    p <- hint l
+    q <- a
+    lift $ p --> q
+    pure p
+
+hint :: String -> DotGen Text
+hint l = nodeg [ label l, shape Ellipse ]
+
+noder :: String -> DotGen Text
+noder l = nodeg [ label l ]
+
 --------------------------------------------------------------------------------
 
 instance AST Expr where
@@ -145,14 +165,22 @@ instance AST Expr where
     dotAST (LitNum n) = nodeg [ label $ printf "{ LitNum | %d }" n ]
     dotAST (Var k) = nodeg [ label $ printf "{ Var | %s }" k ]
 
-    -- non-terminals
+    -- operators
     dotAST (Not a) = dotunary "Not" a
-    
     dotAST (Equal a b) = dotbin "Equal" a b
     dotAST (Add a b) = dotbin "Add" a b
     dotAST (Subtract a b) = dotbin "Subtract" a b
     dotAST (Multiply a b) = dotbin "Multiply" a b
     dotAST (Divide a b) = dotbin "Divide" a b
+
+    dotAST (Call (FunctionCall f args)) = do
+        p <- noder $ printf "{ FunctionCall | %s }" f
+        q <- hint "args"
+        r <- mapM dotAST args
+        lift $ do
+            p --> q
+            mapM_ (q-->) r
+        pure p
     
 
 instance AST Stat where
@@ -178,3 +206,31 @@ instance AST Stat where
         lift $ p --> q
         pure p
 
+    dotAST (IfStat c a b) = do
+        p <- nodeg [ label "If" ]
+        c' <- addHint "condition" $ dotAST c
+        a' <- addHint "then" $ dotAST a
+        b' <- addHint "else" $ dotAST b
+        lift $ do
+            p --> c'
+            p --> a'
+            p --> b'
+        pure p
+
+    dotAST (WhileStat c a) = do
+        p <- noder "while"
+        c' <- addHint "condition" $ dotAST a
+        lift $ p --> c'
+        pure p
+        
+
+
+          -- | WhileStat Expr Stat
+          -- | VarStat Ident Expr
+          -- | AssignStat Ident Expr
+    dotAST (ExprStat e) = do
+        p <- noder "ExprStat"
+        q <- dotAST e
+        lift $ p --> q
+        pure p
+          -- | CallStat FunctionCall

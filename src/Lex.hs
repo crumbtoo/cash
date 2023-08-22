@@ -31,6 +31,7 @@ lexer ('}':cs) = TokenRBrace    : lexer cs
 -- operators
 lexer ('=':'=':cs)  = TokenEqual     : lexer cs     
 lexer ('!':'=':cs)  = TokenNotEqual  : lexer cs     
+lexer ('=':cs)      = TokenAssign    : lexer cs     
 lexer ('!':cs)      = TokenNot       : lexer cs
 lexer ('+':cs)      = TokenPlus      : lexer cs     
 lexer ('-':cs)      = TokenMinus     : lexer cs     
