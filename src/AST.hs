@@ -95,6 +95,21 @@ data FunctionCall = FunctionCall Ident [Expr]
 
 --------------------------------------------------------------------------------
 
+instance Semigroup Stat where
+    a <> BlockStat []           = a
+    BlockStat [] <> b           = b
+
+    BlockStat a <> BlockStat b  = BlockStat $ a ++ b
+    a           <> BlockStat b  = BlockStat $ a : b
+    BlockStat a <> b            = BlockStat $ a ++ [b]
+    a           <> b            = BlockStat $ [a,b]
+
+
+instance Monoid Stat where
+    mempty = BlockStat []
+
+--------------------------------------------------------------------------------
+
 type DotGen a = StateT Int (DotM Text) a
 
 nodeg :: Attributes -> DotGen Text
@@ -117,6 +132,7 @@ mklabel = do
 
 writeAST' :: (AST a) => Maybe a -> IO ()
 writeAST' (Just a) = writeAST a
+writeAST' Nothing = fail "parsing failed"
 
 writeAST :: (AST a) => a -> IO ()
 writeAST ast = do

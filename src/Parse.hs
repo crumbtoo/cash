@@ -167,26 +167,31 @@ ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
 number :: Parser [Token] Int
 number = fmap (\(TokenNumber n) -> n) $ satisfy isNumber
 
+parenthesised :: Parser [Token] o -> Parser [Token] o
+parenthesised p = token TokenLParen *> p <* token TokenRParen
+
 --------------------------------------------------------------------------------
 
 stat :: Parser [Token] Stat
-stat  = returnStat
-    <|> exprStat
+stat  = stat' <* token TokenSemicolon
+    where stat' = assignStat
+              <|> exprStat
+              <|> ifStat
+              <|> whileStat
+              <|> varStat
+              <|> returnStat
 
 returnStat :: Parser [Token] Stat
-returnStat = ReturnStat <$> (token TokenReturn *> expr <* token TokenSemicolon)
+returnStat = ReturnStat <$> (token TokenReturn *> expr)
 
 exprStat :: Parser [Token] Stat
-exprStat = ExprStat <$> expr <* token TokenSemicolon
+exprStat = ExprStat <$> expr
 
 ifStat :: Parser [Token] Stat
 ifStat = IfStat
     <$> (token TokenIf *> parenthesised expr)
     <*> stat
     <*> ((token TokenElse *> stat) <|> pure (BlockStat []))
-
-parenthesised :: Parser [Token] o -> Parser [Token] o
-parenthesised p = token TokenLParen *> p <* token TokenRParen
 
 whileStat :: Parser [Token] Stat
 whileStat = WhileStat
@@ -196,10 +201,13 @@ whileStat = WhileStat
 varStat :: Parser [Token] Stat
 varStat = VarStat
     <$> (token TokenLet *> ident)
-    <*> (token TokenAssign *> expr <* token TokenSemicolon)
+    <*> (token TokenAssign *> expr)
 
 assignStat :: Parser [Token] Stat
 assignStat = AssignStat
     <$> ident
-    <*> (token TokenAssign *> expr <* token TokenSemicolon)
+    <*> (token TokenAssign *> expr)
+
+blockStat :: Parser [Token] Stat
+blockStat = BlockStat <$> (token TokenLBrace *> many stat <* token TokenRBrace)
 
