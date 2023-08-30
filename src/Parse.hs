@@ -1,34 +1,35 @@
 {-# LANGUAGE LambdaCase #-}
 module Parse
-    ( parse
-    , runParserT
-    , runParser
-    , evalParser
+    -- ( parse
+    -- , runParserT
+    -- , runParser
+    -- , evalParser
 
-    , token
-    , anyToken
-    , string
-    , satisfy
-    , satisfies
+    -- , token
+    -- , anyToken
+    -- , string
+    -- , satisfy
+    -- , satisfies
 
-    -- , ws
-    -- , comment
-    -- , cws
+    -- -- , ws
+    -- -- , comment
+    -- -- , cws
 
-    -- re-exports
-    , (<|>)
-    , some
-    , many
-    )
+    -- -- re-exports
+    -- , (<|>)
+    -- , some
+    -- , many
+    -- )
     where
 --------------------------------------------------------------------------------
 import       Control.Applicative
 import       Control.Monad
+import       Control.Monad.Zip
 import       Data.List
-import       Data.Char
+import       Data.Functor
 
 import AST
-import Lex
+import Lex (lexer)
 --------------------------------------------------------------------------------
 
 newtype ParserT i m o = ParserT { runParserT :: i -> m (i, o) }
@@ -69,12 +70,15 @@ instance (MonadPlus m) => MonadPlus (ParserT i m)
 instance (MonadPlus m) => MonadFail (ParserT i m) where
     fail _ = mzero
 
+instance (Monad m) => MonadZip (ParserT i m) where
+    mzip = liftA2 (,)
+
 --------------------------------------------------------------------------------
 
 -- parse a single token satisfying a predicate
 satisfy :: (Alternative m) => (a -> Bool) -> ParserT [a] m a
 satisfy p = ParserT $ \case
-        (x:xs) | p x -> pure $ (xs, x)
+        (x:xs) | p x -> pure (xs, x)
         _            -> empty
 
 satisfies :: (MonadPlus m) => (a -> Bool) -> ParserT [a] m [a]
@@ -82,6 +86,11 @@ satisfies = many . satisfy
 
 token :: (Alternative m, Eq a) => a -> ParserT [a] m a
 token c = satisfy (==c)
+
+lookahead :: (Alternative m) => ParserT [a] m a
+lookahead = ParserT $ \case
+        [] -> empty
+        i  -> pure (i, head i)
 
 anyToken :: (Alternative m) => ParserT [a] m a
 anyToken = satisfy (const True)
@@ -105,9 +114,112 @@ string s = ParserT $ \i ->
 
 --------------------------------------------------------------------------------
 
-parse :: Parser String [String]
-parse = many (string "Function")
+-- shitty hack because i'm a shit programmer
+-- flipAssoc :: Expr -> Expr
+-- flipAssoc (Add a (Add b c)) = Add (Add (flipAssoc a) (flipAssoc b)) (flipAssoc c)
 
--- expr :: Parser [Token] (Expr a)
--- expr = 
+parselex :: Parser [Token] o -> String -> Maybe o
+parselex p = evalParser p . lexer
+
+binfix :: Parser i (o -> o -> o) -> Parser i o -> Parser i o
+binfix opp termp = foldl (\acc (f,b) -> acc `f` b) <$> termp <*> opterms
+    where opterms = many (opp `mzip` termp)
+
+expr :: Parser [Token] Expr
+expr = comparison
+
+comparison :: Parser [Token] Expr
+comparison = binfix opp bsum
+    where opp = token TokenEqual $> Equal
+            <|> token TokenNotEqual $> NotEqual
+
+bsum :: Parser [Token] Expr
+bsum = binfix opp bproduct
+    where opp = token TokenPlus $> Add
+            <|> token TokenMinus $> Subtract
+
+bproduct :: Parser [Token] Expr
+bproduct = binfix opp unary
+    where opp = token TokenStar $> Multiply
+            <|> token TokenSlash $> Divide
+
+unary :: Parser [Token] Expr
+unary = Not <$> (token TokenNot *> atom)
+    <|> atom
+
+atom :: Parser [Token] Expr
+atom  = Call <$> functionCall
+    <|> Var <$> ident
+    <|> LitNum <$> number
+    <|> parenthesised expr
+
+functionCall :: Parser [Token] FunctionCall
+functionCall = FunctionCall <$>
+    ident <*> (token TokenLParen *> argList <* token TokenRParen)
+    where
+        argList :: Parser [Token] [Expr]
+        argList = commaSeparated expr
+
+commaSeparated :: Parser [Token] o -> Parser [Token] [o]
+commaSeparated p = (:) <$> p <*> (many $ token TokenComma *> p)
+               <|> pure []
+
+ident :: Parser [Token] String
+ident = fmap (\(TokenIdent s) -> s) $ satisfy isIdent
+
+number :: Parser [Token] Int
+number = fmap (\(TokenNumber n) -> n) $ satisfy isNumber
+
+parenthesised :: Parser [Token] o -> Parser [Token] o
+parenthesised p = token TokenLParen *> p <* token TokenRParen
+
+--------------------------------------------------------------------------------
+
+stat :: Parser [Token] Stat
+stat  = stat' <* token TokenSemicolon
+    <|> functionStat -- no semicolon
+    where stat' = assignStat
+              <|> exprStat
+              <|> ifStat
+              <|> whileStat
+              <|> varStat
+              <|> returnStat
+              <|> blockStat
+
+returnStat :: Parser [Token] Stat
+returnStat = ReturnStat <$> (token TokenReturn *> expr)
+
+exprStat :: Parser [Token] Stat
+exprStat = ExprStat <$> expr
+
+ifStat :: Parser [Token] Stat
+ifStat = IfStat
+    <$> (token TokenIf *> parenthesised expr)
+    <*> stat
+    <*> ((token TokenElse *> stat) <|> pure (BlockStat []))
+
+whileStat :: Parser [Token] Stat
+whileStat = WhileStat
+    <$> expr
+    <*> stat
+
+varStat :: Parser [Token] Stat
+varStat = VarStat
+    <$> (token TokenLet *> ident)
+    <*> (token TokenAssign *> expr)
+
+assignStat :: Parser [Token] Stat
+assignStat = AssignStat
+    <$> ident
+    <*> (token TokenAssign *> expr)
+
+blockStat :: Parser [Token] Stat
+blockStat = BlockStat <$> (token TokenLBrace *> many stat <* token TokenRBrace)
+
+functionStat :: Parser [Token] Stat
+functionStat = FunctionStat
+    <$> (token TokenFunction *> ident)
+    <*> parenthesised parameters
+    <*> blockStat
+    where parameters = commaSeparated ident
 

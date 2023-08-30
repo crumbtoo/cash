@@ -4,8 +4,13 @@ module AST
     , Expr(..)
     , FunctionCall(..)
     , Stat(..)
-    , Def(..)
+    , Token(..)
+
     , writeAST
+    , writeAST'
+
+    , isIdent
+    , isNumber
     )
     where
 --------------------------------------------------------------------------------
@@ -21,73 +26,87 @@ import           Text.Printf
 import           System.Process                         (system)
 --------------------------------------------------------------------------------
 
--- data AST
---     -- terminals
---     = Number Int
---     | Ident String
---     -- expr
---     | Not AST -- TODO: this should be an expression, not any AST
---     | Equal AST AST
---     | NotEqual AST AST
---     | Add AST AST
---     | Subtract AST AST
---     | Multiply AST AST
---     | Divide AST AST
---     | Call String [AST]
---     deriving (Eq, Ord, Show)
+data Token
+    -- keywords
+    = TokenFunction
+    | TokenIf
+    | TokenElse
+    | TokenReturn
+    | TokenLet
+    | TokenWhile
+    -- syntax
+    | TokenComma
+    | TokenSemicolon
+    | TokenLParen
+    | TokenRParen
+    | TokenLBrace
+    | TokenRBrace
+    -- literals
+    | TokenNumber Int
+    | TokenIdent String
+    -- exprs
+    | TokenNot
+    | TokenEqual
+    | TokenNotEqual
+    | TokenAssign
+    | TokenPlus
+    | TokenStar
+    | TokenMinus
+    | TokenSlash
+    deriving (Show, Eq)
 
--- data Token = TokenNumber Int
---            | TokenIdent String
+isIdent :: Token -> Bool
+isIdent (TokenIdent _) = True
+isIdent _              = False
 
--- data Expr = Number Int
---           | Ident String
---           | Not Expr
---           | Equal Expr Expr
---           | NotEqual Expr Expr
---           | Add Expr Expr
---           | Subtract Expr Expr
---           | Multiply Expr Expr
---           | Divide Expr Expr
+isNumber :: Token -> Bool
+isNumber (TokenNumber _) = True
+isNumber _              = False
 
-data Expr where
-    Boolean     :: Bool -> Expr
-    Number      :: Int -> Expr
-    Ident       :: String -> Expr
-    Not         :: Expr -> Expr
-    Equal       :: Expr -> Expr -> Expr
-    NotEqual    :: Expr -> Expr -> Expr
-    Add         :: Expr -> Expr -> Expr
-    Subtract    :: Expr -> Expr -> Expr
-    Multiply    :: Expr -> Expr -> Expr
-    Divide      :: Expr -> Expr -> Expr
-    ExpCall     :: FunctionCall -> Expr
+--------------------------------------------------------------------------------
 
-deriving instance Show Expr
+type Ident = String
 
-data FunctionCall where
-    FunctionCall :: String -> [Expr] -> FunctionCall
+data Stat = FunctionStat Ident [Ident] Stat
+          | ReturnStat Expr
+          | IfStat Expr Stat Stat
+          | WhileStat Expr Stat
+          | VarStat Ident Expr
+          | AssignStat Ident Expr
+          | BlockStat [Stat]
+          | ExprStat Expr
+          | CallStat FunctionCall
+          deriving (Show)
 
-deriving instance Show FunctionCall
+data Expr = Call FunctionCall
+          | Var Ident
+          | LitNum Int
+          | Equal Expr Expr
+          | NotEqual Expr Expr
+          | Add Expr Expr
+          | Subtract Expr Expr
+          | Multiply Expr Expr
+          | Divide Expr Expr
+          | Not Expr
+          deriving (Show)
 
--- data Stat a = Call String [Expr a]
---             | Return (Expr a)
---             | Block [Stat a]
---             | If (Expr a) (Stat a) (Stat a)
+data FunctionCall = FunctionCall Ident [Expr]
+    deriving (Show)
 
-data Block
+--------------------------------------------------------------------------------
 
-data Stat where
-    Call        :: String -> [Expr] -> Stat
-    Return      :: Expr -> Stat
-    Block       :: [Stat] -> Stat
-    If          :: Expr -> Stat -> Stat -> Stat
-    Let         :: String -> Expr -> Stat
-    Assign      :: String -> Expr -> Stat
-    While       :: Expr -> Stat -> Stat
+instance Semigroup Stat where
+    a <> BlockStat []           = a
+    BlockStat [] <> b           = b
 
--- data Def   = Function String [String]
-data Def where
-    FunctionDef    :: String -> [String] -> Stat -> Def
+    BlockStat a <> BlockStat b  = BlockStat $ a ++ b
+    a           <> BlockStat b  = BlockStat $ a : b
+    BlockStat a <> b            = BlockStat $ a ++ [b]
+    a           <> b            = BlockStat $ [a,b]
+
+
+instance Monoid Stat where
+    mempty = BlockStat []
 
 --------------------------------------------------------------------------------
 
@@ -111,6 +130,10 @@ mklabel = do
     modify succ
     pure $ "L" <> T.pack (show n)
 
+writeAST' :: (AST a) => Maybe a -> IO ()
+writeAST' (Just a) = writeAST a
+writeAST' Nothing = fail "parsing failed"
+
 writeAST :: (AST a) => a -> IO ()
 writeAST ast = do
     writeFile "/tmp/t.dot" . T.unpack . printDotGraph $ do
@@ -121,22 +144,109 @@ writeAST ast = do
     system "dot -Tsvg /tmp/t.dot > /tmp/t.svg"
     pure ()
 
+dotbin :: (AST a) => String -> a -> a -> DotGen Text
+dotbin l a b = do
+    p <- nodeg [ label l ]
+    q <- dotAST a
+    r <- dotAST b
+    lift $ do
+        p --> q
+        p --> r
+    pure p
+
+dotunary :: (AST a) => String -> a -> DotGen Text
+dotunary l a = do
+    p <- nodeg [ label l ]
+    q <- dotAST a
+    lift $ p --> q
+    pure p
+
+addHint :: String -> DotGen Text -> DotGen Text
+addHint l a = do
+    p <- hint l
+    q <- a
+    lift $ p --> q
+    pure p
+
+hint :: String -> DotGen Text
+hint l = nodeg [ label l, shape Ellipse ]
+
+noder :: String -> DotGen Text
+noder l = nodeg [ label l ]
+
 --------------------------------------------------------------------------------
 
 instance AST Expr where
-    -- terminals
-    dotAST (Number n) = nodeg [ label $ printf "{ Number | %d }" n ]
-    dotAST (Ident k) = nodeg [ label $ printf "{ Ident | %s }" k ]
+    -- atoms
+    dotAST (LitNum n) = nodeg [ label $ printf "{ LitNum | %d }" n ]
+    dotAST (Var k) = nodeg [ label $ printf "{ Var | %s }" k ]
 
-    -- non-terminals
-    dotAST (Not e) = do
-        k <- mklabel
-        lift $ node k [ label "{ Not }" ]
-        v <- dotAST e
-        lift $ k --> v
-        pure k
-        
+    -- operators
+    dotAST (Not a) = dotunary "Not" a
+    dotAST (Equal a b) = dotbin "Equal" a b
+    dotAST (Add a b) = dotbin "Add" a b
+    dotAST (Subtract a b) = dotbin "Subtract" a b
+    dotAST (Multiply a b) = dotbin "Multiply" a b
+    dotAST (Divide a b) = dotbin "Divide" a b
+
+    dotAST (Call (FunctionCall f args)) = do
+        p <- noder $ printf "{ FunctionCall | %s }" f
+        q <- hint "args"
+        r <- mapM dotAST args
+        lift $ do
+            p --> q
+            mapM_ (q-->) r
+        pure p
+    
 
 instance AST Stat where
-    dotAST (Call f args) = undefined
+    dotAST (FunctionStat name params body) = do
+        p <- nodeg [ label $
+                printf "{ FunctionStat | %s | %s }" name (show params) ]
+        q <- dotAST body
+        lift $ p --> q
+        pure q
+    
+    dotAST (BlockStat ss) = do
+        p <- nodeg [ label "BlockStat" ]
 
+        forM ss $ \s -> do
+            q <- dotAST s
+            lift $ p --> q
+
+        pure p
+
+    dotAST (ReturnStat e) = do
+        p <- nodeg [ label "Return" ]
+        q <- dotAST e
+        lift $ p --> q
+        pure p
+
+    dotAST (IfStat c a b) = do
+        p <- nodeg [ label "If" ]
+        c' <- addHint "condition" $ dotAST c
+        a' <- addHint "then" $ dotAST a
+        b' <- addHint "else" $ dotAST b
+        lift $ do
+            p --> c'
+            p --> a'
+            p --> b'
+        pure p
+
+    dotAST (WhileStat c a) = do
+        p <- noder "while"
+        c' <- addHint "condition" $ dotAST a
+        lift $ p --> c'
+        pure p
+        
+
+
+          -- | WhileStat Expr Stat
+          -- | VarStat Ident Expr
+          -- | AssignStat Ident Expr
+    dotAST (ExprStat e) = do
+        p <- noder "ExprStat"
+        q <- dotAST e
+        lift $ p --> q
+        pure p
+          -- | CallStat FunctionCall
