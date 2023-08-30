@@ -16,6 +16,7 @@ data Token
     | TokenReturn
     | TokenLet
     | TokenWhile
+    | TokenAssert
     -- syntax
     | TokenComma
     | TokenSemicolon
@@ -61,6 +62,7 @@ lexer s
     | w == "return"    = TokenReturn      : lexer rest
     | w == "let"       = TokenLet         : lexer rest
     | w == "while"     = TokenWhile       : lexer rest
+    | w == "assert"    = TokenAssert      : lexer rest
     where (w,rest) = span isLetter s
 
 -- identifier

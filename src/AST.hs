@@ -21,34 +21,6 @@ import           Text.Printf
 import           System.Process                         (system)
 --------------------------------------------------------------------------------
 
--- data AST
---     -- terminals
---     = Number Int
---     | Ident String
---     -- expr
---     | Not AST -- TODO: this should be an expression, not any AST
---     | Equal AST AST
---     | NotEqual AST AST
---     | Add AST AST
---     | Subtract AST AST
---     | Multiply AST AST
---     | Divide AST AST
---     | Call String [AST]
---     deriving (Eq, Ord, Show)
-
--- data Token = TokenNumber Int
---            | TokenIdent String
-
--- data Expr = Number Int
---           | Ident String
---           | Not Expr
---           | Equal Expr Expr
---           | NotEqual Expr Expr
---           | Add Expr Expr
---           | Subtract Expr Expr
---           | Multiply Expr Expr
---           | Divide Expr Expr
-
 data Expr where
     Boolean     :: Bool -> Expr
     Number      :: Int -> Expr
@@ -74,8 +46,6 @@ deriving instance Show FunctionCall
 --             | Block [Stat a]
 --             | If (Expr a) (Stat a) (Stat a)
 
-data Block
-
 data Stat where
     Call        :: String -> [Expr] -> Stat
     Return      :: Expr -> Stat
@@ -84,10 +54,11 @@ data Stat where
     Let         :: String -> Expr -> Stat
     Assign      :: String -> Expr -> Stat
     While       :: Expr -> Stat -> Stat
+    Assert      :: Expr -> Stat
 
 -- data Def   = Function String [String]
 data Def where
-    FunctionDef    :: String -> [String] -> Stat -> Def
+    FunctionDef     :: String -> [String] -> Stat -> Def
 
 --------------------------------------------------------------------------------
 
