@@ -1,25 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Parse
-    -- ( parse
-    -- , runParserT
-    -- , runParser
-    -- , evalParser
-
-    -- , token
-    -- , anyToken
-    -- , string
-    -- , satisfy
-    -- , satisfies
-
-    -- -- , ws
-    -- -- , comment
-    -- -- , cws
-
-    -- -- re-exports
-    -- , (<|>)
-    -- , some
-    -- , many
-    -- )
+    ( parser
+    )
     where
 --------------------------------------------------------------------------------
 import       Control.Applicative
@@ -101,22 +83,7 @@ string s = ParserT $ \i ->
         (Just rest) -> pure (rest, s)
         _           -> empty
 
--- discord whitespace
--- ws :: (MonadPlus m) => ParserT String m ()
--- ws = void $ some (satisfy isSpace)
-
--- comment :: (MonadPlus m) => ParserT String m String
--- comment   = string "//" *> satisfies (/='\n') <* optional (char '\n')
---         <|> string "/*" *> (satisfies (/='*') <* string "*/")
-
--- cws :: (MonadPlus m) => ParserT String m ()
--- cws = void $ many (ws <|> void comment)
-
 --------------------------------------------------------------------------------
-
--- shitty hack because i'm a shit programmer
--- flipAssoc :: Expr -> Expr
--- flipAssoc (Add a (Add b c)) = Add (Add (flipAssoc a) (flipAssoc b)) (flipAssoc c)
 
 parselex :: Parser [Token] o -> String -> Maybe o
 parselex p = evalParser p . lexer
@@ -179,6 +146,8 @@ stat :: Parser [Token] Stat
 stat  = stat' <* token TokenSemicolon
     <|> functionStat -- no semicolon
     where stat' = assignStat
+              <|> assertStat
+              <|> callStat
               <|> exprStat
               <|> ifStat
               <|> whileStat
@@ -188,6 +157,13 @@ stat  = stat' <* token TokenSemicolon
 
 returnStat :: Parser [Token] Stat
 returnStat = ReturnStat <$> (token TokenReturn *> expr)
+
+assertStat :: Parser [Token] Stat
+assertStat = AssertStat
+         <$> (token TokenAssert *> expr)
+
+callStat :: Parser [Token] Stat
+callStat = CallStat <$> functionCall
 
 exprStat :: Parser [Token] Stat
 exprStat = ExprStat <$> expr
@@ -218,8 +194,22 @@ blockStat = BlockStat <$> (token TokenLBrace *> many stat <* token TokenRBrace)
 
 functionStat :: Parser [Token] Stat
 functionStat = FunctionStat
-    <$> (token TokenFunction *> ident)
+    <$> optionalVisibility
+    <*> (token TokenFunction *> ident)
     <*> parenthesised parameters
     <*> blockStat
     where parameters = commaSeparated ident
+
+optionalVisibility :: Parser [Token] Visibility
+optionalVisibility = visibility <|> pure Private
+
+visibility :: Parser [Token] Visibility
+visibility = token TokenPublic $> Public
+         <|> token TokenPrivate $> Private
+
+topLevel :: Parser [Token] Stat
+topLevel = functionStat
+
+parser :: [Token] -> Maybe [Stat]
+parser = evalParser (many topLevel)
 

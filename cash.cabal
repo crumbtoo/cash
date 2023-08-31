@@ -26,6 +26,8 @@ library
                     , Parse
                     , Lex
                     , ARM
+                    , CodeGen
+                    , Cash
     hs-source-dirs:   src
     build-depends:    base ^>=4.16.4.0
                     , graphviz

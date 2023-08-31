@@ -47,6 +47,7 @@ lexer s
     | w == "let"       = TokenLet         : lexer rest
     | w == "while"     = TokenWhile       : lexer rest
     | w == "assert"    = TokenAssert      : lexer rest
+    | w == "public"    = TokenPublic      : lexer rest
     where (w,rest) = span isLetter s
 
 -- identifier

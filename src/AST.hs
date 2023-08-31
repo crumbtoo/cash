@@ -2,6 +2,7 @@
 module AST
     ( AST(..)
     , Expr(..)
+    , Visibility(..)
     , FunctionCall(..)
     , Stat(..)
     , Token(..)
@@ -35,6 +36,8 @@ data Token
     | TokenLet
     | TokenWhile
     | TokenAssert
+    | TokenPublic
+    | TokenPrivate
     -- syntax
     | TokenComma
     | TokenSemicolon
@@ -85,8 +88,11 @@ type Ident = String
 data FunctionCall = FunctionCall Ident [Expr]
     deriving (Show)
 
+data Visibility = Public | Private
+    deriving (Show, Eq)
+
 data Stat where
-    FunctionStat    :: Ident -> [Ident] -> Stat -> Stat
+    FunctionStat    :: Visibility -> Ident -> [Ident] -> Stat -> Stat
     ReturnStat      :: Expr -> Stat
     IfStat          :: Expr -> Stat -> Stat -> Stat
     WhileStat       :: Expr -> Stat -> Stat
@@ -94,14 +100,11 @@ data Stat where
     AssignStat      :: String -> Expr -> Stat
     BlockStat       :: [Stat] -> Stat
     ExprStat        :: Expr -> Stat
-    CallStat        :: String -> [Expr] -> Stat
+    CallStat        :: FunctionCall -> Stat
     AssertStat      :: Expr -> Stat
 
 deriving instance Show Stat
 
--- data Def   = Function String [String]
-data Def where
-    FunctionDef     :: String -> [String] -> Stat -> Def
 --------------------------------------------------------------------------------
 
 instance Semigroup Stat where
@@ -209,9 +212,12 @@ instance AST Expr where
     
 
 instance AST Stat where
-    dotAST (FunctionStat name params body) = do
+    dotAST (FunctionStat vis name params body) = do
         p <- nodeg [ label $
-                printf "{ FunctionStat | %s | %s }" name (show params) ]
+                printf "{ FunctionStat | %s | %s | %s }"
+                       (show vis)
+                       name
+                       (show params) ]
         q <- dotAST body
         lift $ p --> q
         pure q
@@ -248,8 +254,6 @@ instance AST Stat where
         lift $ p --> c'
         pure p
         
-
-
           -- | WhileStat Expr Stat
           -- | VarStat Ident Expr
           -- | AssignStat Ident Expr
