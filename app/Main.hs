@@ -1,5 +1,9 @@
 module Main where
 
+import Cash
+
 main :: IO ()
-main = putStrLn "Hello, Haskell!"
+main = do
+    i <- getContents
+    printCompiler i
 

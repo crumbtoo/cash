@@ -10,6 +10,7 @@ module ARM
 
     -- registers
     , r0
+    , r1
 
     -- register synonyms
     , fp
@@ -19,8 +20,12 @@ module ARM
     -- instructions
     , add
     , mov
+    , moveq
+    , movne
     , push
     , pop
+    , cmp
+    , bl
 
     -- directives
     , global
@@ -36,6 +41,7 @@ import qualified Data.Text                  as T
 import           Data.Text                  (Text)
 import           Data.List                  (intersperse)
 import           Data.Coerce                (coerce)
+import           Data.Char                  (ord)
 import           GHC.Exts                   (IsString)
 --------------------------------------------------------------------------------
 newtype ARM a = ARM { runARM :: RWS () [Instruction] Int a }
@@ -73,6 +79,9 @@ instance FlexibleOperand Immediate where
     -- number of bits within a 32-bit word
     toOperand2 = FlexImmediate
 
+instance FlexibleOperand Char where
+    toOperand2 = FlexImmediate . ord
+
 instance FlexibleOperand Reg where
     toOperand2 r = FlexRegister r Nothing
 
@@ -90,11 +99,18 @@ data Instruction where
     Directive   :: Directive    -> Instruction
     LabelInstr  :: Label        -> Instruction
 
-    Add     :: Reg -> Reg       -> Operand2 -> Instruction
-    Mov     :: Reg -> Operand2              -> Instruction
+    Add     ::              Reg -> Reg       -> Operand2 -> Instruction
+    Mov     :: Condition -> Reg -> Operand2              -> Instruction
+    Cmp     ::              Reg -> Operand2              -> Instruction
+
+    Bl      ::              Label -> Instruction
 
     Push    :: RegSet -> Instruction
     Pop     :: RegSet -> Instruction
+
+data Condition = Uncond
+               | CondEq
+               | CondNe
 
 data Directive = Global Label
 
@@ -106,8 +122,9 @@ data Reg = R0  | R1  | R2  | R3
          | R8  | R9  | R10 | R11
          | R12 | R13 | R14 | R15
 
-r0 :: Reg
+r0, r1 :: Reg
 r0 = R0
+r1 = R1
 
 fp, lr, pc :: Reg
 fp = R11
@@ -140,15 +157,22 @@ asmInstruction mn = case mn of
     -- (Mov rd op2)    -> "mov  " <> asmReg rd <> " " <> asmOp2 op2
     -- (Push rs)       -> "push " <> asmRegSet rs
     -- (Pop  rs)       -> "pop  " <> asmRegSet rs
-    (Mov rd op2)    -> mnemonic "mov" [asmReg rd, asmOp2 op2]
-    (Push rs)       -> mnemonic "push" [asmRegSet rs]
-    (Pop  rs)       -> mnemonic "pop" [asmRegSet rs]
+    (Mov cnd rd op2) -> mnemonic "mov" cnd [asmReg rd, asmOp2 op2]
+    (Push rs)        -> mnemonic "push" Uncond [asmRegSet rs]
+    (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
+    (Cmp  rn op2)    -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
+    (Bl   l)         -> mnemonic "bl" Uncond [coerce l]
 
     where
-        mnemonic s ops = "\t" <> align s <> " "
+        mnemonic s c ops = "\t" <> align (s <> condsuffix c) <> " "
             <> (mconcat . intersperse ", " $ ops)
         
-        align s = s <> (T.pack $ replicate (max (5 - T.length s) 0) ' ')
+        align s = s <> (T.pack $ replicate (max (7 - T.length s) 0) ' ')
+
+        condsuffix a = case a of
+            Uncond -> ""
+            CondEq -> "eq"
+            CondNe -> "ne"
 
 asmDirective :: Directive -> Text
 asmDirective d = case d of
@@ -220,13 +244,25 @@ add :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM ()
 add rd rs op2 = emiti $ Add rd rs (toOperand2 op2)
 
 mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
-mov rd op2 = emiti $ Mov rd (toOperand2 op2)
+mov rd op2 = emiti $ Mov Uncond rd (toOperand2 op2)
+
+moveq :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+moveq rd op2 = emiti $ Mov CondEq rd (toOperand2 op2)
+
+movne :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movne rd op2 = emiti $ Mov CondNe rd (toOperand2 op2)
 
 push :: (FlexibleRegSet a) => a -> ARM ()
 push rs = emiti $ Push (toRegSet rs)
 
 pop :: (FlexibleRegSet a) => a -> ARM ()
 pop rs = emiti $ Pop (toRegSet rs)
+
+cmp :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+cmp rn op2 = emiti $ Cmp rn (toOperand2 op2)
+
+bl :: Label -> ARM ()
+bl l = emiti $ Bl l
 
 infixl 9 #
 

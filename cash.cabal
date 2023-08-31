@@ -39,7 +39,7 @@ library
                       , FlexibleInstances
     default-language: GHC2021
 
-executable cas-hs
+executable cash
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
@@ -49,5 +49,6 @@ executable cas-hs
     -- other-extensions:
     hs-source-dirs:   app
     build-depends:    base ^>=4.16.4.0
+                    , cash
     default-language: Haskell2010
 
