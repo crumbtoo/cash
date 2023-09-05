@@ -24,6 +24,7 @@ module ARM
     , add
     , sub
     , mul
+    , udiv
     , mov
     , moveq
     , movne
@@ -133,6 +134,7 @@ data Instruction where
     Add     ::              Reg -> Reg       -> Operand2 -> Instruction
     Sub     ::              Reg -> Reg       -> Operand2 -> Instruction
     Mul     ::              Reg -> Reg       -> Reg      -> Instruction
+    Udiv    ::              Reg -> Reg       -> Reg      -> Instruction
     Mov     :: Condition -> Reg -> Operand2              -> Instruction
     Cmp     ::              Reg -> Operand2              -> Instruction
 
@@ -157,6 +159,7 @@ data Reg = R0  | R1  | R2  | R3
          | R4  | R5  | R6  | R7
          | R8  | R9  | R10 | R11
          | R12 | R13 | R14 | R15
+         deriving Eq
 
 r0, r1 :: Reg
 r0 = R0
@@ -194,6 +197,7 @@ asmInstruction mn = case mn of
     (Add rd rn op2)  -> mnemonic "add" Uncond [asmReg rd, asmReg rn, asmOp2 op2]
     (Sub rd rn op2)  -> mnemonic "sub" Uncond [asmReg rd, asmReg rn, asmOp2 op2]
     (Mul rd rm rs)   -> mnemonic "mul" Uncond [asmReg rd, asmReg rm, asmReg rs]
+    (Udiv rd rm rs)  -> mnemonic "udiv" Uncond [asmReg rd, asmReg rm, asmReg rs]
     (Mov cnd rd op2) -> mnemonic "mov" cnd [asmReg rd, asmOp2 op2]
     (Push rs)        -> mnemonic "push" Uncond [asmRegSet rs]
     (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
@@ -299,6 +303,9 @@ sub rd rs op2 = emiti $ Sub rd rs (toOperand2 op2)
 
 mul :: Reg -> Reg -> Reg -> ARM ()
 mul rd rm rs = emiti $ Mul rd rm rs
+
+udiv :: Reg -> Reg -> Reg -> ARM ()
+udiv rd rm rs = emiti $ Udiv rd rm rs
 
 mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
 mov rd op2 = emiti $ Mov Uncond rd (toOperand2 op2)

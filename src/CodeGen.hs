@@ -59,10 +59,32 @@ instance CodeGen Expr where
             moveq rd #1
             movne rd #0
 
+    emitTo rd (NotEqual a b) = do
+        comment "!="
+        binop a b $ do
+            cmp r0 r1
+            movne rd #1
+            moveq rd #0
+
     emitTo rd (Multiply a b) = do
         comment "*"
         binop a b $ do
             mul rd r0 r1
+
+    emitTo rd (Divide a b) = do
+        comment "/"
+        binop a b $ do
+            udiv rd r0 r1
+
+    emitTo rd (Add a b) = do
+        comment "+"
+        binop a b $ do
+            add rd r0 r1
+
+    emitTo rd (Subtract a b) = do
+        comment "-"
+        binop a b $ do
+            sub rd r0 r1
 
     emitTo rd (Not e) = do
         comment "!"
@@ -78,6 +100,5 @@ binop a b asm = do
     push [r0, ip]
     emitTo r1 b
     pop [r0, ip]
-
     asm
 
