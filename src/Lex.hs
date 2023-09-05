@@ -40,6 +40,7 @@ lexer ('/':cs)      = TokenSlash     : lexer cs
 
 -- keywords
 lexer s
+    | w == "fn"        = TokenFunction    : lexer rest
     | w == "function"  = TokenFunction    : lexer rest
     | w == "if"        = TokenIf          : lexer rest
     | w == "else"      = TokenElse        : lexer rest

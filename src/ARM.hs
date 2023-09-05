@@ -1,14 +1,16 @@
 {-# LANGUAGE GeneralisedNewtypeDeriving, OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneKindSignatures, KindSignatures, TypeFamilies, DataKinds, PolyKinds #-}
 module ARM
     ( ARM
-
+    
     -- TODO: organise
     , genASM
     , (#)
     , toLabel
 
     -- registers
+    , Reg
     , r0
     , r1
 
@@ -16,9 +18,12 @@ module ARM
     , fp
     , lr
     , pc
+    , ip
 
     -- instructions
     , add
+    , sub
+    , mul
     , mov
     , moveq
     , movne
@@ -26,6 +31,10 @@ module ARM
     , pop
     , cmp
     , bl
+    , ldr
+
+    -- aliases
+    , pusha
 
     -- directives
     , global
@@ -54,7 +63,9 @@ genASM arm =
 
 newtype Label = Label Text
     deriving (IsString)
-type Immediate = Int
+
+data Immediate = ImmInt Int
+               | ImmChar Char
 
 newlabel :: ARM Label
 newlabel = ARM $ do
@@ -74,13 +85,13 @@ instance FlexibleRegSet [Reg] where
 class FlexibleOperand a where
     toOperand2 :: a -> Operand2
 
-instance FlexibleOperand Immediate where
+instance FlexibleOperand Int where
     -- TODO: The constant must correspond to an 8-bit pattern rotated by an even
     -- number of bits within a 32-bit word
-    toOperand2 = FlexImmediate
+    toOperand2 = FlexImmediate . ImmInt
 
 instance FlexibleOperand Char where
-    toOperand2 = FlexImmediate . ord
+    toOperand2 = FlexImmediate . ImmChar
 
 instance FlexibleOperand Reg where
     toOperand2 r = FlexRegister r Nothing
@@ -88,6 +99,26 @@ instance FlexibleOperand Reg where
 instance FlexibleOperand (Reg, Shift) where
     toOperand2 (r,s) = FlexRegister r (Just s)
 
+--------------------------------------------------------------------------------
+
+data MemOp = DerefReg Reg
+           | MemAddress Int -- todo: word32
+           | MemLabel Label
+
+class FlexibleMemOp a where
+    toMemOp :: a -> MemOp
+
+type DereferencedReg = [Reg]
+
+instance FlexibleMemOp DereferencedReg where
+    toMemOp [r] = DerefReg r
+    toMemOp _ = error "list type is only for syntax :("
+
+instance FlexibleMemOp Int where
+    toMemOp = MemAddress
+
+instance FlexibleMemOp Label where
+    toMemOp = MemLabel
 --------------------------------------------------------------------------------
 
 -- not necessarily an instruction. an Instruction represents some line of
@@ -100,8 +131,13 @@ data Instruction where
     LabelInstr  :: Label        -> Instruction
 
     Add     ::              Reg -> Reg       -> Operand2 -> Instruction
+    Sub     ::              Reg -> Reg       -> Operand2 -> Instruction
+    Mul     ::              Reg -> Reg       -> Reg      -> Instruction
     Mov     :: Condition -> Reg -> Operand2              -> Instruction
     Cmp     ::              Reg -> Operand2              -> Instruction
+
+    -- memory
+    Ldr     ::              Reg -> MemOp                 -> Instruction
 
     Bl      ::              Label -> Instruction
 
@@ -130,6 +166,7 @@ fp, lr, pc :: Reg
 fp = R11
 lr = R14
 pc = R15
+ip = R12
 
 data Shift = ASR Int
            | LSL Int
@@ -154,13 +191,14 @@ asmInstruction (LabelInstr l) = coerce l <> ":"
 
 -- mnemonics
 asmInstruction mn = case mn of
-    -- (Mov rd op2)    -> "mov  " <> asmReg rd <> " " <> asmOp2 op2
-    -- (Push rs)       -> "push " <> asmRegSet rs
-    -- (Pop  rs)       -> "pop  " <> asmRegSet rs
+    (Add rd rn op2)  -> mnemonic "add" Uncond [asmReg rd, asmReg rn, asmOp2 op2]
+    (Sub rd rn op2)  -> mnemonic "sub" Uncond [asmReg rd, asmReg rn, asmOp2 op2]
+    (Mul rd rm rs)   -> mnemonic "mul" Uncond [asmReg rd, asmReg rm, asmReg rs]
     (Mov cnd rd op2) -> mnemonic "mov" cnd [asmReg rd, asmOp2 op2]
     (Push rs)        -> mnemonic "push" Uncond [asmRegSet rs]
     (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
     (Cmp  rn op2)    -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
+    (Ldr  rd mop)    -> mnemonic "ldr" Uncond [asmReg rd, asmMop mop]
     (Bl   l)         -> mnemonic "bl" Uncond [coerce l]
 
     where
@@ -174,9 +212,18 @@ asmInstruction mn = case mn of
             CondEq -> "eq"
             CondNe -> "ne"
 
+asmMop :: MemOp -> Text
+asmMop mop = case mop of
+    DerefReg r      -> "[" <> asmReg r <> "]"
+    MemAddress n    -> "=" <> T.pack (show n)
+    MemLabel l      -> "=" <> asmLabel l
+
 asmDirective :: Directive -> Text
 asmDirective d = case d of
-    Global (Label l) -> "global " <> l
+    Global l -> "global " <> asmLabel l
+
+asmLabel :: Label -> Text
+asmLabel = coerce
 
 asmReg :: Reg -> Text
 asmReg r = case r of
@@ -203,9 +250,13 @@ asmRegSet (RegSet rs) = "{" <> mconcat (intersperse ", " regs) <> "}"
     where regs = fmap asmReg rs
 
 asmOp2 :: Operand2 -> Text
-asmOp2 (FlexImmediate n) = T.pack $ "#" ++ show n
+asmOp2 (FlexImmediate n) = "#" <> asmImm n
 asmOp2 (FlexRegister r Nothing) = asmReg r
 asmOp2 (FlexRegister r (Just s)) = asmReg r <> ", " <> asmShift s
+
+asmImm :: Immediate -> Text
+asmImm (ImmInt n) = T.pack $ show n
+asmImm (ImmChar c) = T.pack $ show c
 
 asmShift :: Shift -> Text
 asmShift s = case s of
@@ -215,7 +266,7 @@ asmShift s = case s of
     ROR n   -> "ROR " <> imm n
     RRX     -> "RRX"
 
-    where imm = asmOp2 . FlexImmediate
+    where imm = asmOp2 . toOperand2
 
 --------------------------------------------------------------------------------
 
@@ -243,6 +294,12 @@ global l = emiti $ Directive $ Global l
 add :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM ()
 add rd rs op2 = emiti $ Add rd rs (toOperand2 op2)
 
+sub :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM ()
+sub rd rs op2 = emiti $ Sub rd rs (toOperand2 op2)
+
+mul :: Reg -> Reg -> Reg -> ARM ()
+mul rd rm rs = emiti $ Mul rd rm rs
+
 mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
 mov rd op2 = emiti $ Mov Uncond rd (toOperand2 op2)
 
@@ -264,10 +321,17 @@ cmp rn op2 = emiti $ Cmp rn (toOperand2 op2)
 bl :: Label -> ARM ()
 bl l = emiti $ Bl l
 
+ldr :: (FlexibleMemOp mop) => Reg -> mop -> ARM ()
+ldr rd ms = emiti $ Ldr rd (toMemOp ms)
+
+-- | push and preserve dword alignment
+pusha :: Reg -> ARM ()
+pusha rs = emiti $ Push (RegSet [rs, ip])
+
 infixl 9 #
 
 -- | used to avoid ambiguity errors with Num and FlexibleOperand
 -- in a way that is remenicent of gas's arm syntax
-(#) :: (Immediate -> b) -> Immediate -> b
+(#) :: (Int -> b) -> Int -> b
 f # x = f x
 
