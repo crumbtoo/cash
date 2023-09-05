@@ -12,9 +12,9 @@ import AST
 --------------------------------------------------------------------------------
 class CodeGen a where
     -- | emit into a given register; default will not be effecient
-    emitTo :: Reg -> a -> ARM ()
+    emitTo :: Reg -> a -> ARM r ()
     -- | emits some assembly
-    emit :: a -> ARM ()
+    emit :: a -> ARM r ()
 
     emitTo rd a = emit a >> mov r0 rd
     emit = emitTo r0
@@ -129,7 +129,7 @@ instance CodeGen Expr where
     emitTo rd (Call fncl) = emitTo rd fncl
 
 -- operands placed in r0 and r1
-binop :: (CodeGen a, CodeGen b) => a -> b -> ARM () -> ARM ()
+binop :: (CodeGen a, CodeGen b) => a -> b -> ARM r () -> ARM r ()
 binop a b asm = do
     emitTo r0 a
     push [r0, ip]
@@ -143,7 +143,7 @@ instance CodeGen FunctionCall where
     --     let x = argv `zip` [r0,r1,r2,r3]
     --     in foldr f (pure ()) x >> bl (toLabel name)
     --     where
-    --         f :: (Expr, Reg) -> ARM () -> ARM ()
+    --         f :: (Expr, Reg) -> ARM r () -> ARM r ()
     --         f (e,r) arm = do
     --             emitTo r0 e
     --             push [r0, ip]
@@ -158,7 +158,7 @@ instance CodeGen FunctionCall where
         bl (toLabel name)
 
         where
-            f :: [Expr] -> ARM ()
+            f :: [Expr] -> ARM r ()
             f es = forM_ ([0..] `zip` es) $ \(n,e) -> do
                 emit e
                 str r0 (sp, 4*n :: Int)

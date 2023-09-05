@@ -24,7 +24,7 @@ compiler :: String -> Maybe Text
 compiler = lexer
        >>> parser
        >>> fmap (traverse_ emit)
-       >>> fmap genASM
+       >>> fmap (genASM [])
 
 printCompiler :: String -> IO ()
 printCompiler = compiler >>> traverse_ T.putStr

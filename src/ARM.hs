@@ -64,12 +64,12 @@ import           Data.Coerce                (coerce)
 import           Data.Char                  (ord)
 import           GHC.Exts                   (IsString)
 --------------------------------------------------------------------------------
-newtype ARM a = ARM { runARM :: RWS () [Instruction] Int a }
+newtype ARM r a = ARM { runARM :: RWS r [Instruction] Int a }
     deriving (Functor, Applicative, Monad)
 
-genASM :: ARM a -> Text
-genASM arm =
-    let (_,_,w) = runRWS (runARM arm) () 0
+genASM :: r -> ARM r a -> Text
+genASM r arm =
+    let (_,_,w) = runRWS (runARM arm) r 0
     in T.unlines $ fmap asmInstruction w
 
 newtype Label = Label Text
@@ -78,7 +78,7 @@ newtype Label = Label Text
 data Immediate = ImmInt Int
                | ImmChar Char
 
-allocLabel :: ARM Label
+allocLabel :: ARM r Label
 allocLabel = ARM $ do
     n <- get
     modify succ
@@ -305,7 +305,7 @@ asmShift s = case s of
 
 --------------------------------------------------------------------------------
 
-emiti :: Instruction -> ARM ()
+emiti :: Instruction -> ARM r ()
 emiti = ARM . tell . pure
 
 toLabel :: String -> Label
@@ -313,77 +313,77 @@ toLabel = Label . T.pack
 
 --------------------------------------------------------------------------------
 
-comment :: String -> ARM ()
+comment :: String -> ARM r ()
 comment s = emiti $ Comment s
 
-label :: Label -> ARM ()
+label :: Label -> ARM r ()
 label l = emiti $ LabelInstr l
 
 --------------------------------------------------------------------------------
 
-global :: Label -> ARM ()
+global :: Label -> ARM r ()
 global l = emiti $ Directive $ Global l
 
 --------------------------------------------------------------------------------
 
-add :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM ()
+add :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM r ()
 add rd rs op2 = emiti $ Add rd rs (toOperand2 op2)
 
-sub :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM ()
+sub :: (FlexibleOperand op2) => Reg -> Reg -> op2 -> ARM r ()
 sub rd rs op2 = emiti $ Sub rd rs (toOperand2 op2)
 
-mul :: Reg -> Reg -> Reg -> ARM ()
+mul :: Reg -> Reg -> Reg -> ARM r ()
 mul rd rm rs = emiti $ Mul rd rm rs
 
-udiv :: Reg -> Reg -> Reg -> ARM ()
+udiv :: Reg -> Reg -> Reg -> ARM r ()
 udiv rd rm rs = emiti $ Udiv rd rm rs
 
-mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 mov rd op2 = emiti $ Mov Uncond rd (toOperand2 op2)
 
-moveq :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+moveq :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 moveq rd op2 = emiti $ Mov CondEQ rd (toOperand2 op2)
 
-movne :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movne :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 movne rd op2 = emiti $ Mov CondNE rd (toOperand2 op2)
 
-movlt :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movlt :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 movlt rd op2 = emiti $ Mov CondLT rd (toOperand2 op2)
 
-movge :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movge :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 movge rd op2 = emiti $ Mov CondGE rd (toOperand2 op2)
 
-push :: (FlexibleRegSet a) => a -> ARM ()
+push :: (FlexibleRegSet a) => a -> ARM r ()
 push rs = emiti $ Push (toRegSet rs)
 
-pop :: (FlexibleRegSet a) => a -> ARM ()
+pop :: (FlexibleRegSet a) => a -> ARM r ()
 pop rs = emiti $ Pop (toRegSet rs)
 
-cmp :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+cmp :: (FlexibleOperand op2) => Reg -> op2 -> ARM r ()
 cmp rn op2 = emiti $ Cmp rn (toOperand2 op2)
 
 -- i use `b` as an identifier WAY too often for this to conflict... sorry
-branch :: Label -> ARM ()
+branch :: Label -> ARM r ()
 branch l = emiti $ Branch Uncond l
 
-beq :: Label -> ARM ()
+beq :: Label -> ARM r ()
 beq l = emiti $ Branch CondEQ l
 
-bne :: Label -> ARM ()
+bne :: Label -> ARM r ()
 bne l = emiti $ Branch CondNE l
 
-bl :: Label -> ARM ()
+bl :: Label -> ARM r ()
 bl l = emiti $ Bl l
 
-ldr :: (FlexibleMemOp mop) => Reg -> mop -> ARM ()
+ldr :: (FlexibleMemOp mop) => Reg -> mop -> ARM r ()
 ldr rd ms = emiti $ Ldr rd (toMemOp ms)
 
-str :: (FlexibleMemOp mop) => Reg -> mop -> ARM ()
+str :: (FlexibleMemOp mop) => Reg -> mop -> ARM r ()
 str rs ms = emiti $ Str Uncond rs (toMemOp ms)
 --------------------------------------------------------------------------------
 
 -- | push and preserve dword alignment
-pusha :: Reg -> ARM ()
+pusha :: Reg -> ARM r ()
 pusha rs = emiti $ Push (RegSet [rs, ip])
 
 infixl 9 #
