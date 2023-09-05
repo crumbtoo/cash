@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
 module CodeGen
     ( emit
     )
@@ -6,11 +6,13 @@ module CodeGen
 --------------------------------------------------------------------------------
 import           Control.Monad
 import           Data.Foldable                  (traverse_)
+import           Data.Kind
 import           Text.Printf                    (printf)
 import ARM
 import AST
 --------------------------------------------------------------------------------
 class CodeGen a where
+    type RState a :: *
     -- | emit into a given register; default will not be effecient
     emitTo :: Reg -> a -> ARM r ()
     -- | emits some assembly
@@ -21,7 +23,11 @@ class CodeGen a where
     {-# MINIMAL emit | emitTo #-}
 --------------------------------------------------------------------------------
 
+type Binding = (String, Expr)
+
 instance CodeGen Stat where
+    type RState Stat = [Binding]
+
     emitTo _ (FunctionStat vis name pars body) = do
         comment $ printf "function %s()" name
         let l = toLabel name
@@ -77,6 +83,8 @@ instance CodeGen Stat where
         emitTo r0 e
 
 instance CodeGen Expr where
+    type RState Expr = [Binding]
+
     emitTo rd (LitNum n) = comment "litnum" >> ldr rd n
 
     emitTo rd (Equal a b) = do
@@ -138,6 +146,8 @@ binop a b asm = do
     asm
 
 instance CodeGen FunctionCall where
+    type RState FunctionCall = [Binding]
+
     -- push & pop
     -- emitTo rd (FunctionCall name argv) =
     --     let x = argv `zip` [r0,r1,r2,r3]
