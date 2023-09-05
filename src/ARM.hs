@@ -82,7 +82,7 @@ allocLabel :: ARM Label
 allocLabel = ARM $ do
     n <- get
     modify succ
-    pure $ Label . T.pack $ ("L" <> show n)
+    pure $ Label . T.pack $ (".L" <> show n)
 
 class FlexibleRegSet a where
     toRegSet :: a -> RegSet

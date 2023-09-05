@@ -6,6 +6,7 @@ module AST
     , FunctionCall(..)
     , Stat(..)
     , Token(..)
+    , Ident
 
     , isNumber
     , isIdent

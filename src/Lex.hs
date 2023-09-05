@@ -68,6 +68,7 @@ lexer (c:cs)
 -- int literals
 lexer s@(c:_)
     -- todo hex
+    -- todo char
     | isDigit c   = TokenNumber (foldDigits 10 num) : lexer rest
     where
         (num, rest) = span isDigit s
