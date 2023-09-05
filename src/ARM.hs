@@ -14,12 +14,15 @@ module ARM
     , Reg
     , r0
     , r1
+    , r2
+    , r3
 
     -- register synonyms
     , fp
     , lr
     , pc
     , ip
+    , sp
 
     -- instructions
     , add
@@ -29,6 +32,8 @@ module ARM
     , mov
     , moveq
     , movne
+    , movlt
+    , movge
     , push
     , pop
     , cmp
@@ -37,6 +42,7 @@ module ARM
     , beq
     , bne
     , ldr
+    , str
 
     -- aliases
     , pusha
@@ -109,6 +115,7 @@ instance FlexibleOperand (Reg, Shift) where
 data MemOp = DerefReg Reg
            | MemAddress Int -- todo: word32
            | MemLabel Label
+           | MemOffset (Reg, FlexOffset)
 
 class FlexibleMemOp a where
     toMemOp :: a -> MemOp
@@ -117,7 +124,12 @@ type DereferencedReg = [Reg]
 
 instance FlexibleMemOp DereferencedReg where
     toMemOp [r] = DerefReg r
-    toMemOp _ = error "list type is only for syntax :("
+    toMemOp _ = error "list instance is only for syntax :("
+
+type FlexOffset = Int
+
+instance FlexibleMemOp (Reg, FlexOffset) where
+    toMemOp = MemOffset
 
 instance FlexibleMemOp Int where
     toMemOp = MemAddress
@@ -144,6 +156,7 @@ data Instruction where
 
     -- memory
     Ldr     ::              Reg -> MemOp                 -> Instruction
+    Str     :: Condition -> Reg -> MemOp                 -> Instruction
 
     Branch  :: Condition -> Label -> Instruction
     Bl      ::              Label -> Instruction
@@ -152,8 +165,10 @@ data Instruction where
     Pop     :: RegSet -> Instruction
 
 data Condition = Uncond
-               | CondEq
-               | CondNe
+               | CondEQ
+               | CondNE
+               | CondLT
+               | CondGE
 
 data Directive = Global Label
 
@@ -166,15 +181,18 @@ data Reg = R0  | R1  | R2  | R3
          | R12 | R13 | R14 | R15
          deriving Eq
 
-r0, r1 :: Reg
+r0, r1, r2, r3 :: Reg
 r0 = R0
 r1 = R1
+r2 = R2
+r3 = R3
 
 fp, lr, pc :: Reg
 fp = R11
+ip = R12
+sp = R13
 lr = R14
 pc = R15
-ip = R12
 
 data Shift = ASR Int
            | LSL Int
@@ -206,27 +224,34 @@ asmInstruction mn = case mn of
     (Mov cnd rd op2) -> mnemonic "mov" cnd [asmReg rd, asmOp2 op2]
     (Push rs)        -> mnemonic "push" Uncond [asmRegSet rs]
     (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
-    (Cmp  rn op2)    -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
-    (Ldr  rd mop)    -> mnemonic "ldr" Uncond [asmReg rd, asmMop mop]
+    (Cmp   rn op2)   -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
+    (Ldr   rd mop)   -> mnemonic "ldr" Uncond [asmReg rd, asmMop mop]
+    (Str c rs mop)   -> mnemonic "str" c [asmReg rs, asmMop mop]
     (Branch cnd l)   -> mnemonic "b" cnd [coerce l]
     (Bl         l)   -> mnemonic "bl" Uncond [coerce l]
 
     where
-        mnemonic s c ops = "\t" <> align (s <> condsuffix c) <> " "
+        mnemonic s cnd ops = "\t" <> align (s <> condsuffix cnd) <> " "
             <> (mconcat . intersperse ", " $ ops)
         
         align s = s <> (T.pack $ replicate (max (7 - T.length s) 0) ' ')
 
         condsuffix a = case a of
             Uncond -> ""
-            CondEq -> "eq"
-            CondNe -> "ne"
+            CondEQ -> "eq"
+            CondNE -> "ne"
+            CondLT -> "lt"
+            CondGE -> "ge"
 
 asmMop :: MemOp -> Text
 asmMop mop = case mop of
     DerefReg r      -> "[" <> asmReg r <> "]"
     MemAddress n    -> "=" <> T.pack (show n)
     MemLabel l      -> "=" <> asmLabel l
+    MemOffset (r,o) -> "[" <> asmReg r <> "," <> asmFlexOff o <> "]"
+
+asmFlexOff :: FlexOffset -> Text
+asmFlexOff n = "#" <> T.pack (show n) -- temp
 
 asmDirective :: Directive -> Text
 asmDirective d = case d of
@@ -317,10 +342,16 @@ mov :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
 mov rd op2 = emiti $ Mov Uncond rd (toOperand2 op2)
 
 moveq :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
-moveq rd op2 = emiti $ Mov CondEq rd (toOperand2 op2)
+moveq rd op2 = emiti $ Mov CondEQ rd (toOperand2 op2)
 
 movne :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
-movne rd op2 = emiti $ Mov CondNe rd (toOperand2 op2)
+movne rd op2 = emiti $ Mov CondNE rd (toOperand2 op2)
+
+movlt :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movlt rd op2 = emiti $ Mov CondLT rd (toOperand2 op2)
+
+movge :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
+movge rd op2 = emiti $ Mov CondGE rd (toOperand2 op2)
 
 push :: (FlexibleRegSet a) => a -> ARM ()
 push rs = emiti $ Push (toRegSet rs)
@@ -336,16 +367,20 @@ branch :: Label -> ARM ()
 branch l = emiti $ Branch Uncond l
 
 beq :: Label -> ARM ()
-beq l = emiti $ Branch CondEq l
+beq l = emiti $ Branch CondEQ l
 
 bne :: Label -> ARM ()
-bne l = emiti $ Branch CondNe l
+bne l = emiti $ Branch CondNE l
 
 bl :: Label -> ARM ()
 bl l = emiti $ Bl l
 
 ldr :: (FlexibleMemOp mop) => Reg -> mop -> ARM ()
 ldr rd ms = emiti $ Ldr rd (toMemOp ms)
+
+str :: (FlexibleMemOp mop) => Reg -> mop -> ARM ()
+str rs ms = emiti $ Str Uncond rs (toMemOp ms)
+--------------------------------------------------------------------------------
 
 -- | push and preserve dword alignment
 pusha :: Reg -> ARM ()

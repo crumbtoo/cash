@@ -32,6 +32,7 @@ lexer ('}':cs) = TokenRBrace    : lexer cs
 -- operators
 lexer ('=':'=':cs)  = TokenEqual     : lexer cs     
 lexer ('!':'=':cs)  = TokenNotEqual  : lexer cs     
+lexer ('<':cs)      = TokenLT        : lexer cs     
 lexer ('=':cs)      = TokenAssign    : lexer cs     
 lexer ('!':cs)      = TokenNot       : lexer cs
 lexer ('+':cs)      = TokenPlus      : lexer cs     
@@ -66,8 +67,9 @@ lexer (c:cs)
 
 -- int literals
 lexer s@(c:_)
-    | isDigit c  = TokenNumber (toInt num) : lexer rest
+    -- todo hex
+    | isDigit c   = TokenNumber (foldDigits 10 num) : lexer rest
     where
         (num, rest) = span isDigit s
-        toInt = foldl (\n d -> 10 * n + digitToInt d) 0
+        foldDigits base = foldl (\n d -> base * n + digitToInt d) 0
 

@@ -54,6 +54,7 @@ data Token
     | TokenNot
     | TokenEqual
     | TokenNotEqual
+    | TokenLT
     | TokenAssign
     | TokenPlus
     | TokenStar
@@ -77,6 +78,7 @@ data Expr where
     Not         :: Expr -> Expr
     Equal       :: Expr -> Expr -> Expr
     NotEqual    :: Expr -> Expr -> Expr
+    CmpLT       :: Expr -> Expr -> Expr
     Add         :: Expr -> Expr -> Expr
     Subtract    :: Expr -> Expr -> Expr
     Multiply    :: Expr -> Expr -> Expr

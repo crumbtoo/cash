@@ -97,8 +97,9 @@ expr = comparison
 
 comparison :: Parser [Token] Expr
 comparison = binfix opp bsum
-    where opp = token TokenEqual $> Equal
+    where opp = token TokenEqual    $> Equal
             <|> token TokenNotEqual $> NotEqual
+            <|> token TokenLT       $> CmpLT
 
 bsum :: Parser [Token] Expr
 bsum = binfix opp bproduct

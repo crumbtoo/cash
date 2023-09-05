@@ -34,6 +34,9 @@ instance CodeGen Stat where
         emit body
         pop [fp, pc]
 
+    -- function calls always return to r0
+    emitTo rd (CallStat fncl) = emitTo rd fncl
+
     emitTo _ (LabelStat name) = do
         label (toLabel name)
 
@@ -90,6 +93,12 @@ instance CodeGen Expr where
             movne rd #1
             moveq rd #0
 
+    emitTo rd (CmpLT a b) =
+        binop a b $ do
+            cmp r0 r1
+            movlt rd #1
+            movge rd #0
+
     emitTo rd (Multiply a b) = do
         comment "*"
         binop a b $ do
@@ -117,6 +126,8 @@ instance CodeGen Expr where
         movne rd #0
         moveq rd #1
 
+    emitTo rd (Call fncl) = emitTo rd fncl
+
 -- operands placed in r0 and r1
 binop :: (CodeGen a, CodeGen b) => a -> b -> ARM () -> ARM ()
 binop a b asm = do
@@ -125,4 +136,30 @@ binop a b asm = do
     emitTo r1 b
     pop [r0, ip]
     asm
+
+instance CodeGen FunctionCall where
+    -- push & pop
+    -- emitTo rd (FunctionCall name argv) =
+    --     let x = argv `zip` [r0,r1,r2,r3]
+    --     in foldr f (pure ()) x >> bl (toLabel name)
+    --     where
+    --         f :: (Expr, Reg) -> ARM () -> ARM ()
+    --         f (e,r) arm = do
+    --             emitTo r0 e
+    --             push [r0, ip]
+    --             arm
+    --             pop [r, ip]
+
+    -- sub & str
+    emitTo rd (FunctionCall name argv) = do
+        sub sp sp #16
+        f argv
+        pop [r0, r1, r2, r3]
+        bl (toLabel name)
+
+        where
+            f :: [Expr] -> ARM ()
+            f es = forM_ ([0..] `zip` es) $ \(n,e) -> do
+                emit e
+                str r0 (sp, 4*n :: Int)
 
