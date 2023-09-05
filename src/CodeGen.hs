@@ -40,14 +40,32 @@ instance CodeGen Stat where
     emitTo _ (GotoStat name) = do
         branch (toLabel name)
 
+    emitTo _ (IfStat cond thn els) = do
+        pastElse <- allocLabel
+        toElse <- allocLabel
+        emitTo r0 cond
+        cmp r0 #0
+        -- if falsey, jump to else
+        beq toElse
+
+        -- do then-clause and jump past else-clause
+        emit thn
+        branch pastElse
+
+        label toElse
+        emit els
+        label pastElse
+
+    -- if-statements with no else-clause use empty block stats
+    emitTo _ (BlockStat []) = pure ()
     emitTo _ (BlockStat ss) = traverse_ emit ss
 
     emitTo rd (AssertStat e) = do
         comment "assert"
         emitTo r0 e
-        cmp r0 #1
-        moveq r0 '.'
-        movne r0 'F'
+        cmp r0 #0
+        movne r0 '.'
+        moveq r0 'F'
         bl "putchar"
         
     emitTo rd (ReturnStat e) = do
@@ -95,9 +113,9 @@ instance CodeGen Expr where
     emitTo rd (Not e) = do
         comment "!"
         emitTo rd e
-        cmp rd #1
-        moveq rd #0
-        movne rd #1
+        cmp rd #0
+        movne rd #0
+        moveq rd #1
 
 -- operands placed in r0 and r1
 binop :: (CodeGen a, CodeGen b) => a -> b -> ARM () -> ARM ()

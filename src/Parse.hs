@@ -144,6 +144,7 @@ parenthesised p = token TokenLParen *> p <* token TokenRParen
 
 stat :: Parser [Token] Stat
 stat  = stat' <* token TokenSemicolon
+    <|> ifStat
     <|> blockStat
     <|> labelStat
     <|> functionStat -- no semicolon
@@ -152,7 +153,6 @@ stat  = stat' <* token TokenSemicolon
               <|> gotoStat
               <|> callStat
               <|> exprStat
-              <|> ifStat
               <|> whileStat
               <|> letStat
               <|> returnStat

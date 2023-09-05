@@ -8,6 +8,7 @@ module ARM
     , genASM
     , (#)
     , toLabel
+    , allocLabel
 
     -- registers
     , Reg
@@ -33,6 +34,8 @@ module ARM
     , cmp
     , bl
     , branch
+    , beq
+    , bne
     , ldr
 
     -- aliases
@@ -69,8 +72,8 @@ newtype Label = Label Text
 data Immediate = ImmInt Int
                | ImmChar Char
 
-newlabel :: ARM Label
-newlabel = ARM $ do
+allocLabel :: ARM Label
+allocLabel = ARM $ do
     n <- get
     modify succ
     pure $ Label . T.pack $ ("L" <> show n)
@@ -142,7 +145,7 @@ data Instruction where
     -- memory
     Ldr     ::              Reg -> MemOp                 -> Instruction
 
-    Branch  ::              Label -> Instruction
+    Branch  :: Condition -> Label -> Instruction
     Bl      ::              Label -> Instruction
 
     Push    :: RegSet -> Instruction
@@ -205,8 +208,8 @@ asmInstruction mn = case mn of
     (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
     (Cmp  rn op2)    -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
     (Ldr  rd mop)    -> mnemonic "ldr" Uncond [asmReg rd, asmMop mop]
-    (Branch l)       -> mnemonic "b" Uncond [coerce l]
-    (Bl     l)       -> mnemonic "bl" Uncond [coerce l]
+    (Branch cnd l)   -> mnemonic "b" cnd [coerce l]
+    (Bl         l)   -> mnemonic "bl" Uncond [coerce l]
 
     where
         mnemonic s c ops = "\t" <> align (s <> condsuffix c) <> " "
@@ -246,7 +249,7 @@ asmReg r = case r of
     R9 -> "r9"
     R10 -> "r10"
     R11 -> "fp"
-    R12 -> "r12"
+    R12 -> "ip"
     R13 -> "r13"
     R14 -> "lr"
     R15 -> "pc"
@@ -330,7 +333,13 @@ cmp rn op2 = emiti $ Cmp rn (toOperand2 op2)
 
 -- i use `b` as an identifier WAY too often for this to conflict... sorry
 branch :: Label -> ARM ()
-branch l = emiti $ Branch l
+branch l = emiti $ Branch Uncond l
+
+beq :: Label -> ARM ()
+beq l = emiti $ Branch CondEq l
+
+bne :: Label -> ARM ()
+bne l = emiti $ Branch CondNe l
 
 bl :: Label -> ARM ()
 bl l = emiti $ Bl l
