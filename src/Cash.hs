@@ -23,7 +23,7 @@ import ARM
 compiler :: String -> Maybe Text
 compiler = lexer
        >>> parser
-       >>> fmap emit
+       >>> fmap (traverse_ emit)
        >>> fmap genASM
 
 printCompiler :: String -> IO ()
