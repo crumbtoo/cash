@@ -38,9 +38,11 @@ data Token
     | TokenAssert
     | TokenPublic
     | TokenPrivate
+    | TokenGoto
     -- syntax
     | TokenComma
     | TokenSemicolon
+    | TokenColon
     | TokenLParen
     | TokenRParen
     | TokenLBrace
@@ -96,6 +98,8 @@ data Stat where
     ReturnStat      :: Expr -> Stat
     IfStat          :: Expr -> Stat -> Stat -> Stat
     WhileStat       :: Expr -> Stat -> Stat
+    LabelStat       :: Ident -> Stat
+    GotoStat        :: Ident -> Stat
     LetStat         :: String -> Expr -> Stat
     AssignStat      :: String -> Expr -> Stat
     BlockStat       :: [Stat] -> Stat

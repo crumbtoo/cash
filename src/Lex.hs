@@ -23,6 +23,7 @@ lexer (c:cs)
 -- syntax
 lexer (',':cs) = TokenComma     : lexer cs
 lexer (';':cs) = TokenSemicolon : lexer cs
+lexer (':':cs) = TokenColon     : lexer cs
 lexer ('(':cs) = TokenLParen    : lexer cs
 lexer (')':cs) = TokenRParen    : lexer cs
 lexer ('{':cs) = TokenLBrace    : lexer cs
@@ -48,7 +49,10 @@ lexer s
     | w == "let"       = TokenLet         : lexer rest
     | w == "while"     = TokenWhile       : lexer rest
     | w == "assert"    = TokenAssert      : lexer rest
+    | w == "pub"       = TokenPublic      : lexer rest
     | w == "public"    = TokenPublic      : lexer rest
+    | w == "private"   = TokenPublic      : lexer rest
+    | w == "goto"      = TokenGoto        : lexer rest
     where (w,rest) = span isLetter s
 
 -- identifier

@@ -34,6 +34,12 @@ instance CodeGen Stat where
         emit body
         pop [fp, pc]
 
+    emitTo _ (LabelStat name) = do
+        label (toLabel name)
+
+    emitTo _ (GotoStat name) = do
+        branch (toLabel name)
+
     emitTo _ (BlockStat ss) = traverse_ emit ss
 
     emitTo rd (AssertStat e) = do

@@ -32,6 +32,7 @@ module ARM
     , pop
     , cmp
     , bl
+    , branch
     , ldr
 
     -- aliases
@@ -141,6 +142,7 @@ data Instruction where
     -- memory
     Ldr     ::              Reg -> MemOp                 -> Instruction
 
+    Branch  ::              Label -> Instruction
     Bl      ::              Label -> Instruction
 
     Push    :: RegSet -> Instruction
@@ -203,7 +205,8 @@ asmInstruction mn = case mn of
     (Pop  rs)        -> mnemonic "pop" Uncond [asmRegSet rs]
     (Cmp  rn op2)    -> mnemonic "cmp" Uncond [asmReg rn, asmOp2 op2]
     (Ldr  rd mop)    -> mnemonic "ldr" Uncond [asmReg rd, asmMop mop]
-    (Bl   l)         -> mnemonic "bl" Uncond [coerce l]
+    (Branch l)       -> mnemonic "b" Uncond [coerce l]
+    (Bl     l)       -> mnemonic "bl" Uncond [coerce l]
 
     where
         mnemonic s c ops = "\t" <> align (s <> condsuffix c) <> " "
@@ -324,6 +327,10 @@ pop rs = emiti $ Pop (toRegSet rs)
 
 cmp :: (FlexibleOperand op2) => Reg -> op2 -> ARM ()
 cmp rn op2 = emiti $ Cmp rn (toOperand2 op2)
+
+-- i use `b` as an identifier WAY too often for this to conflict... sorry
+branch :: Label -> ARM ()
+branch l = emiti $ Branch l
 
 bl :: Label -> ARM ()
 bl l = emiti $ Bl l

@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Parse
-    ( parser
-    )
+    -- ( parser
+    -- )
     where
 --------------------------------------------------------------------------------
 import       Control.Applicative
@@ -144,16 +144,24 @@ parenthesised p = token TokenLParen *> p <* token TokenRParen
 
 stat :: Parser [Token] Stat
 stat  = stat' <* token TokenSemicolon
+    <|> blockStat
+    <|> labelStat
     <|> functionStat -- no semicolon
     where stat' = assignStat
               <|> assertStat
+              <|> gotoStat
               <|> callStat
               <|> exprStat
               <|> ifStat
               <|> whileStat
               <|> letStat
               <|> returnStat
-              <|> blockStat
+
+labelStat :: Parser [Token] Stat
+labelStat = LabelStat <$> ident <* token TokenColon
+
+gotoStat :: Parser [Token] Stat
+gotoStat = GotoStat <$> (token TokenGoto *> ident)
 
 returnStat :: Parser [Token] Stat
 returnStat = ReturnStat <$> (token TokenReturn *> expr)
