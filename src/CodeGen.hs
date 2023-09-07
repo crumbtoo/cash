@@ -8,12 +8,20 @@ import           Control.Monad
 import           Control.Exception              (assert)
 import           Control.Monad.State
 import           Data.Foldable                  (traverse_)
+import           Data.Default                   (Default(def))
 import           Data.Kind
 import           Text.Printf                    (printf)
 import ARM
 import AST
 --------------------------------------------------------------------------------
-type UState = [Binding]
+data UState = UState
+    { usBindings :: [(Ident, Int)]
+    }
+
+instance Default UState where
+    def = UState
+        { usBindings = []
+        }
 
 class CodeGen a where
     -- | emit into a given register; default will not be effecient
@@ -25,9 +33,6 @@ class CodeGen a where
     emit = emitTo r0
     {-# MINIMAL emit | emitTo #-}
 --------------------------------------------------------------------------------
-
--- value ident is bound to is stored at fp + int
-type Binding = (Ident, Int)
 
 instance CodeGen Stat where
     emitTo _ (FunctionStat vis name pars body) = do
@@ -106,7 +111,7 @@ instance CodeGen Stat where
 instance CodeGen Expr where
 
     emitTo rd (Var k) = do
-        m <- gets (lookup k)
+        m <- gets (lookup k . usBindings)
         case m of
             Just a -> ldr r0 (fp, a)
             Nothing -> error $ printf "undefined variable: %s" k
@@ -166,7 +171,7 @@ instance CodeGen Expr where
 
     -- temp; emit using LValue newtype instance with errors on non-lvalues
     emitTo rd (Reference (Var k)) = do
-        m <- gets (lookup k)
+        m <- gets (lookup k . usBindings)
         case m of
             Just a -> do
                 mov rd fp
@@ -214,7 +219,7 @@ instance CodeGen FunctionCall where
 
 pushBinding :: Ident
             -> Int
-            -> ARM [(Ident, Int)] ()
-pushBinding k off = modify (e:)
+            -> ARM UState ()
+pushBinding k off = modify (\s -> s { usBindings = e : usBindings s })
     where e = (k, off)
 

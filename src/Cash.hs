@@ -11,6 +11,7 @@ import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as T
 import           Data.Foldable              (traverse_)
+import           Data.Default               (Default(def))
 import           System.Process             (callCommand)
 
 import Lex
@@ -24,7 +25,7 @@ compiler :: String -> Maybe Text
 compiler = lexer
        >>> parser
        >>> fmap (traverse_ emit)
-       >>> fmap (genASM [])
+       >>> fmap (genASM def)
 
 printCompiler :: String -> IO ()
 printCompiler = compiler >>> traverse_ T.putStr

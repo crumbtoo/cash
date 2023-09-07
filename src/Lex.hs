@@ -53,7 +53,7 @@ lexer s
     | w == "assert"    = TokenAssert      : lexer rest
     | w == "pub"       = TokenPublic      : lexer rest
     | w == "public"    = TokenPublic      : lexer rest
-    | w == "private"   = TokenPublic      : lexer rest
+    | w == "private"   = TokenPrivate     : lexer rest
     | w == "goto"      = TokenGoto        : lexer rest
     where (w,rest) = span isLetter s
 
@@ -65,6 +65,8 @@ lexer (c:cs)
         (nameTail, rest) = span (isLetter |.| isDigit |.| (=='_')) cs
 
         f |.| g = \a -> f a || g a
+
+lexer ('\'':c:'\'':cs) = TokenNumber (ord c) : lexer cs
 
 -- int literals
 lexer s@(c:_)
