@@ -39,6 +39,7 @@ lexer ('+':cs)      = TokenPlus      : lexer cs
 lexer ('-':cs)      = TokenMinus     : lexer cs     
 lexer ('*':cs)      = TokenStar      : lexer cs     
 lexer ('/':cs)      = TokenSlash     : lexer cs     
+lexer ('&':cs)      = TokenAmpersand : lexer cs     
 
 -- keywords
 lexer s

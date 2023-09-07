@@ -113,6 +113,8 @@ bproduct = binfix opp unary
 
 unary :: Parser [Token] Expr
 unary = Not <$> (token TokenNot *> atom)
+    <|> Reference <$> (token TokenAmpersand *> atom)
+    <|> Dereference <$> (token TokenStar *> atom)
     <|> atom
 
 atom :: Parser [Token] Expr

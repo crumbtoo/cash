@@ -57,6 +57,7 @@ data Token
     | TokenNotEqual
     | TokenLT
     | TokenAssign
+    | TokenAmpersand
     | TokenPlus
     | TokenStar
     | TokenMinus
@@ -77,6 +78,8 @@ data Expr where
     LitNum      :: Int -> Expr
     Var         :: String -> Expr
     Not         :: Expr -> Expr
+    Dereference :: Expr -> Expr
+    Reference   :: Expr -> Expr
     Equal       :: Expr -> Expr -> Expr
     NotEqual    :: Expr -> Expr -> Expr
     CmpLT       :: Expr -> Expr -> Expr

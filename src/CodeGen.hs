@@ -1,33 +1,35 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings, TypeFamilies, NegativeLiterals #-}
 module CodeGen
     ( emit
     )
     where
 --------------------------------------------------------------------------------
 import           Control.Monad
+import           Control.Exception              (assert)
+import           Control.Monad.State
 import           Data.Foldable                  (traverse_)
 import           Data.Kind
 import           Text.Printf                    (printf)
 import ARM
 import AST
 --------------------------------------------------------------------------------
+type UState = [Binding]
+
 class CodeGen a where
-    type RState a :: *
     -- | emit into a given register; default will not be effecient
-    emitTo :: Reg -> a -> ARM r ()
+    emitTo :: Reg -> a -> ARM UState ()
     -- | emits some assembly
-    emit :: a -> ARM r ()
+    emit :: a -> ARM UState ()
 
     emitTo rd a = emit a >> mov r0 rd
     emit = emitTo r0
     {-# MINIMAL emit | emitTo #-}
 --------------------------------------------------------------------------------
 
-type Binding = (String, Expr)
+-- value ident is bound to is stored at fp + int
+type Binding = (Ident, Int)
 
 instance CodeGen Stat where
-    type RState Stat = [Binding]
-
     emitTo _ (FunctionStat vis name pars body) = do
         comment $ printf "function %s()" name
         let l = toLabel name
@@ -36,9 +38,23 @@ instance CodeGen Stat where
             global l
         label l
         
-        push [fp, lr]
+        -- push [fp, lr]
+        -- emit body
+        -- pop [fp, pc]
+        prologue
         emit body
-        pop [fp, pc]
+        epilogue
+
+        where
+            prologue = do
+                push [fp, lr]
+                mov fp sp
+                push [r0, r1, r2, r3]
+                forM_ (pars `zip` [0,4..]) $ \(p,n) ->
+                    pushBinding p (n - 16)
+            epilogue = do
+                mov sp fp
+                pop [fp, pc]
 
     -- function calls always return to r0
     emitTo rd (CallStat fncl) = emitTo rd fncl
@@ -77,13 +93,23 @@ instance CodeGen Stat where
         moveq r0 'F'
         bl "putchar"
         
-    emitTo rd (ReturnStat e) = do
+    emitTo _ (ReturnStat e) = do
         comment "return"
         -- functions should return to r0
         emitTo r0 e
+        bx lr
+
+    -- emitTo rd (LetStat k v) = do
+    --     emitTo rd v
+    --     push
 
 instance CodeGen Expr where
-    type RState Expr = [Binding]
+
+    emitTo rd (Var k) = do
+        m <- gets (lookup k)
+        case m of
+            Just a -> ldr r0 (fp, a)
+            Nothing -> error $ printf "undefined variable: %s" k
 
     emitTo rd (LitNum n) = comment "litnum" >> ldr rd n
 
@@ -134,10 +160,23 @@ instance CodeGen Expr where
         movne rd #0
         moveq rd #1
 
+    emitTo rd (Dereference e) = do
+        emitTo rd e
+        ldr rd [rd]
+
+    -- temp; emit using LValue newtype instance with errors on non-lvalues
+    emitTo rd (Reference (Var k)) = do
+        m <- gets (lookup k)
+        case m of
+            Just a -> do
+                mov rd fp
+                add rd rd a
+            Nothing -> error "erm"
+
     emitTo rd (Call fncl) = emitTo rd fncl
 
 -- operands placed in r0 and r1
-binop :: (CodeGen a, CodeGen b) => a -> b -> ARM r () -> ARM r ()
+binop :: (CodeGen a, CodeGen b) => a -> b -> ARM UState () -> ARM UState ()
 binop a b asm = do
     emitTo r0 a
     push [r0, ip]
@@ -146,7 +185,6 @@ binop a b asm = do
     asm
 
 instance CodeGen FunctionCall where
-    type RState FunctionCall = [Binding]
 
     -- push & pop
     -- emitTo rd (FunctionCall name argv) =
@@ -162,14 +200,21 @@ instance CodeGen FunctionCall where
 
     -- sub & str
     emitTo rd (FunctionCall name argv) = do
+        assert (length argv <= 4) (pure ())
         sub sp sp #16
         f argv
         pop [r0, r1, r2, r3]
         bl (toLabel name)
 
         where
-            f :: [Expr] -> ARM r ()
+            f :: [Expr] -> ARM UState ()
             f es = forM_ ([0..] `zip` es) $ \(n,e) -> do
                 emit e
                 str r0 (sp, 4*n :: Int)
+
+pushBinding :: Ident
+            -> Int
+            -> ARM [(Ident, Int)] ()
+pushBinding k off = modify (e:)
+    where e = (k, off)
 
