@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               cash
+name:               ruelang
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -27,7 +27,7 @@ library
                     , Lex
                     , ARM
                     , CodeGen
-                    , Cash
+                    , Ruelang
     hs-source-dirs:   src
     build-depends:    base ^>=4.16.4.0
                     , graphviz
@@ -40,7 +40,7 @@ library
                       , FlexibleInstances
     default-language: GHC2021
 
-executable cash
+executable ruec
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
@@ -50,6 +50,6 @@ executable cash
     -- other-extensions:
     hs-source-dirs:   app
     build-depends:    base ^>=4.16.4.0
-                    , cash
+                    , ruelang
     default-language: Haskell2010
 

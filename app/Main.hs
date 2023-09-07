@@ -1,6 +1,6 @@
 module Main where
 
-import Cash
+import Ruelang
 
 main :: IO ()
 main = do

@@ -1,4 +1,4 @@
-module Cash
+module Ruelang
     ( compiler
     , printCompiler
     , compileToTmp
