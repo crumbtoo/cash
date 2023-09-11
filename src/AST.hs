@@ -90,11 +90,12 @@ data Expr where
     Call        :: FunctionCall -> Expr
 
 deriving instance Show Expr
+deriving instance Eq Expr
 
 type Ident = String
 
 data FunctionCall = FunctionCall Ident [Expr]
-    deriving (Show)
+    deriving (Show, Eq)
 
 data Visibility = Public | Private
     deriving (Show, Eq)
@@ -114,6 +115,7 @@ data Stat where
     AssertStat      :: Expr -> Stat
 
 deriving instance Show Stat
+deriving instance Eq Stat
 
 --------------------------------------------------------------------------------
 

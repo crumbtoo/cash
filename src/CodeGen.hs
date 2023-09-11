@@ -15,12 +15,14 @@ import ARM
 import AST
 --------------------------------------------------------------------------------
 data UState = UState
-    { usBindings :: [(Ident, Int)]
+    { usBindings        :: [(Ident, Int)]
+    , usNextLocalOffset :: Int
     }
 
 instance Default UState where
     def = UState
-        { usBindings = []
+        { usBindings        = []
+        , usNextLocalOffset = 0
         }
 
 class CodeGen a where
@@ -57,6 +59,7 @@ instance CodeGen Stat where
                 push [r0, r1, r2, r3]
                 forM_ (pars `zip` [0,4..]) $ \(p,n) ->
                     addBinding p (n - 16)
+                setNextLocalOffset (-20)
             epilogue = do
                 mov sp fp
                 pop [fp, pc]
@@ -69,6 +72,17 @@ instance CodeGen Stat where
 
     emitTo _ (GotoStat name) = do
         branch (toLabel name)
+
+    emitTo _ (IfStat cond thn (BlockStat [])) = do
+        skipConsequence <- allocLabel
+        emitTo r0 cond
+
+        -- if falsey, skip then-clause
+        cmp r0 #0
+        beq skipConsequence
+
+        emitTo r0 thn
+        label skipConsequence
 
     emitTo _ (IfStat cond thn els) = do
         pastElse <- allocLabel
@@ -105,8 +119,10 @@ instance CodeGen Stat where
         mov sp fp
         pop [fp, pc]
 
-    -- emitTo rd (LetStat k v) = do
-    --     emitTo rd v
+    emitTo rd (LetStat k v) = do
+        off <- subNextLocalOffset 4
+        emit v
+        addBinding k off
 
 instance CodeGen Expr where
 
@@ -185,7 +201,8 @@ binop :: (CodeGen a, CodeGen b) => a -> b -> ARM UState () -> ARM UState ()
 binop a b asm = do
     emitTo r0 a
     push [r0, ip]
-    emitTo r1 b
+    emitTo r0 b
+    mov r1 r0
     pop [r0, ip]
     asm
 
@@ -207,19 +224,29 @@ instance CodeGen FunctionCall where
     emitTo rd (FunctionCall name argv) = do
         assert (length argv <= 4) (pure ())
         sub sp sp #16
-        f argv
+        pushArgs argv
         pop [r0, r1, r2, r3]
         bl (toLabel name)
 
         where
-            f :: [Expr] -> ARM UState ()
-            f es = forM_ ([0..] `zip` es) $ \(n,e) -> do
+            pushArgs :: [Expr] -> ARM UState ()
+            pushArgs es = forM_ ([0..] `zip` es) $ \(n,e) -> do
                 emit e
                 str r0 (sp, 4*n :: Int)
 
 addBinding :: Ident
             -> Int
             -> ARM UState ()
-addBinding k off = modify (\s -> s { usBindings = e : usBindings s })
+addBinding k off = modify $ \s -> s { usBindings = e : usBindings s }
     where e = (k, off)
+
+subNextLocalOffset :: Int -> ARM UState Int
+subNextLocalOffset n = do
+    noff <- gets usNextLocalOffset
+    let noff' = noff - n
+    modify $ \s -> s { usNextLocalOffset = noff' }
+    pure noff'
+
+setNextLocalOffset :: Int -> ARM UState ()
+setNextLocalOffset n = modify (\s -> s { usNextLocalOffset = n })
 
