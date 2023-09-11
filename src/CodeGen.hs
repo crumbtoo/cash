@@ -5,6 +5,7 @@ module CodeGen
     where
 --------------------------------------------------------------------------------
 import           Control.Monad
+import           Control.Arrow                  ((>>>))
 import           Control.Exception              (assert)
 import           Control.Monad.State
 import           Data.Foldable                  (traverse_)
@@ -73,6 +74,15 @@ instance CodeGen Stat where
     emitTo _ (GotoStat name) = do
         branch (toLabel name)
 
+    emitTo rd (AssignStat k v) = do
+        m <- gets (usBindings >>> lookup k)
+        case m of
+            Just off -> do
+                emitTo r0 v
+                str r0 (fp,off)
+            Nothing -> do
+                error "erm.. undeclared variable. djude."
+
     emitTo _ (IfStat cond thn (BlockStat [])) = do
         skipConsequence <- allocLabel
         emitTo r0 cond
@@ -105,7 +115,6 @@ instance CodeGen Stat where
     emitTo _ (BlockStat ss) = traverse_ emit ss
 
     emitTo rd (AssertStat e) = do
-        comment "assert"
         emitTo r0 e
         cmp r0 #0
         movne r0 '.'
@@ -113,15 +122,15 @@ instance CodeGen Stat where
         bl "putchar"
         
     emitTo _ (ReturnStat e) = do
-        comment "return"
         -- functions should return to r0
         emitTo r0 e
         mov sp fp
         pop [fp, pc]
 
     emitTo rd (LetStat k v) = do
-        off <- subNextLocalOffset 4
-        emit v
+        off <- allocLocal
+        emitTo r0 v
+        str r0 (fp, off)
         addBinding k off
 
 instance CodeGen Expr where
@@ -132,17 +141,15 @@ instance CodeGen Expr where
             Just a -> ldr r0 (fp, a)
             Nothing -> error $ printf "undefined variable: %s" k
 
-    emitTo rd (LitNum n) = comment "litnum" >> ldr rd n
+    emitTo rd (LitNum n) = ldr rd n
 
     emitTo rd (Equal a b) = do
-        comment "=="
         binop a b $ do
             cmp r0 r1
             moveq rd #1
             movne rd #0
 
     emitTo rd (NotEqual a b) = do
-        comment "!="
         binop a b $ do
             cmp r0 r1
             movne rd #1
@@ -155,27 +162,22 @@ instance CodeGen Expr where
             movge rd #0
 
     emitTo rd (Multiply a b) = do
-        comment "*"
         binop a b $ do
             mul rd r0 r1
 
     emitTo rd (Divide a b) = do
-        comment "/"
         binop a b $ do
             udiv rd r0 r1
 
     emitTo rd (Add a b) = do
-        comment "+"
         binop a b $ do
             add rd r0 r1
 
     emitTo rd (Subtract a b) = do
-        comment "-"
         binop a b $ do
             sub rd r0 r1
 
     emitTo rd (Not e) = do
-        comment "!"
         emitTo rd e
         cmp rd #0
         movne rd #0
@@ -246,6 +248,12 @@ subNextLocalOffset n = do
     let noff' = noff - n
     modify $ \s -> s { usNextLocalOffset = noff' }
     pure noff'
+
+allocLocal :: ARM UState Int
+allocLocal = do
+    noff <- gets usNextLocalOffset
+    modify $ \s -> s { usNextLocalOffset = noff - 8 }
+    pure noff
 
 setNextLocalOffset :: Int -> ARM UState ()
 setNextLocalOffset n = modify (\s -> s { usNextLocalOffset = n })
