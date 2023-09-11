@@ -56,7 +56,7 @@ instance CodeGen Stat where
                 mov fp sp
                 push [r0, r1, r2, r3]
                 forM_ (pars `zip` [0,4..]) $ \(p,n) ->
-                    pushBinding p (n - 16)
+                    addBinding p (n - 16)
             epilogue = do
                 mov sp fp
                 pop [fp, pc]
@@ -102,11 +102,11 @@ instance CodeGen Stat where
         comment "return"
         -- functions should return to r0
         emitTo r0 e
-        bx lr
+        mov sp fp
+        pop [fp, pc]
 
     -- emitTo rd (LetStat k v) = do
     --     emitTo rd v
-    --     push
 
 instance CodeGen Expr where
 
@@ -217,9 +217,9 @@ instance CodeGen FunctionCall where
                 emit e
                 str r0 (sp, 4*n :: Int)
 
-pushBinding :: Ident
+addBinding :: Ident
             -> Int
             -> ARM UState ()
-pushBinding k off = modify (\s -> s { usBindings = e : usBindings s })
+addBinding k off = modify (\s -> s { usBindings = e : usBindings s })
     where e = (k, off)
 
